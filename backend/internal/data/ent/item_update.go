@@ -18,6 +18,7 @@ import (
 	"github.com/hay-kot/homebox/backend/internal/data/ent/itemfield"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/label"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/location"
+	"github.com/hay-kot/homebox/backend/internal/data/ent/maintenanceentry"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/predicate"
 )
 
@@ -63,6 +64,26 @@ func (iu *ItemUpdate) SetNillableDescription(s *string) *ItemUpdate {
 // ClearDescription clears the value of the "description" field.
 func (iu *ItemUpdate) ClearDescription() *ItemUpdate {
 	iu.mutation.ClearDescription()
+	return iu
+}
+
+// SetImportRef sets the "import_ref" field.
+func (iu *ItemUpdate) SetImportRef(s string) *ItemUpdate {
+	iu.mutation.SetImportRef(s)
+	return iu
+}
+
+// SetNillableImportRef sets the "import_ref" field if the given value is not nil.
+func (iu *ItemUpdate) SetNillableImportRef(s *string) *ItemUpdate {
+	if s != nil {
+		iu.SetImportRef(*s)
+	}
+	return iu
+}
+
+// ClearImportRef clears the value of the "import_ref" field.
+func (iu *ItemUpdate) ClearImportRef() *ItemUpdate {
+	iu.mutation.ClearImportRef()
 	return iu
 }
 
@@ -132,6 +153,27 @@ func (iu *ItemUpdate) SetNillableArchived(b *bool) *ItemUpdate {
 	if b != nil {
 		iu.SetArchived(*b)
 	}
+	return iu
+}
+
+// SetAssetID sets the "asset_id" field.
+func (iu *ItemUpdate) SetAssetID(i int) *ItemUpdate {
+	iu.mutation.ResetAssetID()
+	iu.mutation.SetAssetID(i)
+	return iu
+}
+
+// SetNillableAssetID sets the "asset_id" field if the given value is not nil.
+func (iu *ItemUpdate) SetNillableAssetID(i *int) *ItemUpdate {
+	if i != nil {
+		iu.SetAssetID(*i)
+	}
+	return iu
+}
+
+// AddAssetID adds i to the "asset_id" field.
+func (iu *ItemUpdate) AddAssetID(i int) *ItemUpdate {
+	iu.mutation.AddAssetID(i)
 	return iu
 }
 
@@ -391,6 +433,17 @@ func (iu *ItemUpdate) ClearSoldNotes() *ItemUpdate {
 	return iu
 }
 
+// SetGroupID sets the "group" edge to the Group entity by ID.
+func (iu *ItemUpdate) SetGroupID(id uuid.UUID) *ItemUpdate {
+	iu.mutation.SetGroupID(id)
+	return iu
+}
+
+// SetGroup sets the "group" edge to the Group entity.
+func (iu *ItemUpdate) SetGroup(g *Group) *ItemUpdate {
+	return iu.SetGroupID(g.ID)
+}
+
 // SetParentID sets the "parent" edge to the Item entity by ID.
 func (iu *ItemUpdate) SetParentID(id uuid.UUID) *ItemUpdate {
 	iu.mutation.SetParentID(id)
@@ -423,17 +476,6 @@ func (iu *ItemUpdate) AddChildren(i ...*Item) *ItemUpdate {
 		ids[j] = i[j].ID
 	}
 	return iu.AddChildIDs(ids...)
-}
-
-// SetGroupID sets the "group" edge to the Group entity by ID.
-func (iu *ItemUpdate) SetGroupID(id uuid.UUID) *ItemUpdate {
-	iu.mutation.SetGroupID(id)
-	return iu
-}
-
-// SetGroup sets the "group" edge to the Group entity.
-func (iu *ItemUpdate) SetGroup(g *Group) *ItemUpdate {
-	return iu.SetGroupID(g.ID)
 }
 
 // AddLabelIDs adds the "label" edge to the Label entity by IDs.
@@ -485,6 +527,21 @@ func (iu *ItemUpdate) AddFields(i ...*ItemField) *ItemUpdate {
 	return iu.AddFieldIDs(ids...)
 }
 
+// AddMaintenanceEntryIDs adds the "maintenance_entries" edge to the MaintenanceEntry entity by IDs.
+func (iu *ItemUpdate) AddMaintenanceEntryIDs(ids ...uuid.UUID) *ItemUpdate {
+	iu.mutation.AddMaintenanceEntryIDs(ids...)
+	return iu
+}
+
+// AddMaintenanceEntries adds the "maintenance_entries" edges to the MaintenanceEntry entity.
+func (iu *ItemUpdate) AddMaintenanceEntries(m ...*MaintenanceEntry) *ItemUpdate {
+	ids := make([]uuid.UUID, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return iu.AddMaintenanceEntryIDs(ids...)
+}
+
 // AddAttachmentIDs adds the "attachments" edge to the Attachment entity by IDs.
 func (iu *ItemUpdate) AddAttachmentIDs(ids ...uuid.UUID) *ItemUpdate {
 	iu.mutation.AddAttachmentIDs(ids...)
@@ -503,6 +560,12 @@ func (iu *ItemUpdate) AddAttachments(a ...*Attachment) *ItemUpdate {
 // Mutation returns the ItemMutation object of the builder.
 func (iu *ItemUpdate) Mutation() *ItemMutation {
 	return iu.mutation
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (iu *ItemUpdate) ClearGroup() *ItemUpdate {
+	iu.mutation.ClearGroup()
+	return iu
 }
 
 // ClearParent clears the "parent" edge to the Item entity.
@@ -530,12 +593,6 @@ func (iu *ItemUpdate) RemoveChildren(i ...*Item) *ItemUpdate {
 		ids[j] = i[j].ID
 	}
 	return iu.RemoveChildIDs(ids...)
-}
-
-// ClearGroup clears the "group" edge to the Group entity.
-func (iu *ItemUpdate) ClearGroup() *ItemUpdate {
-	iu.mutation.ClearGroup()
-	return iu
 }
 
 // ClearLabel clears all "label" edges to the Label entity.
@@ -586,6 +643,27 @@ func (iu *ItemUpdate) RemoveFields(i ...*ItemField) *ItemUpdate {
 	return iu.RemoveFieldIDs(ids...)
 }
 
+// ClearMaintenanceEntries clears all "maintenance_entries" edges to the MaintenanceEntry entity.
+func (iu *ItemUpdate) ClearMaintenanceEntries() *ItemUpdate {
+	iu.mutation.ClearMaintenanceEntries()
+	return iu
+}
+
+// RemoveMaintenanceEntryIDs removes the "maintenance_entries" edge to MaintenanceEntry entities by IDs.
+func (iu *ItemUpdate) RemoveMaintenanceEntryIDs(ids ...uuid.UUID) *ItemUpdate {
+	iu.mutation.RemoveMaintenanceEntryIDs(ids...)
+	return iu
+}
+
+// RemoveMaintenanceEntries removes "maintenance_entries" edges to MaintenanceEntry entities.
+func (iu *ItemUpdate) RemoveMaintenanceEntries(m ...*MaintenanceEntry) *ItemUpdate {
+	ids := make([]uuid.UUID, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return iu.RemoveMaintenanceEntryIDs(ids...)
+}
+
 // ClearAttachments clears all "attachments" edges to the Attachment entity.
 func (iu *ItemUpdate) ClearAttachments() *ItemUpdate {
 	iu.mutation.ClearAttachments()
@@ -609,41 +687,8 @@ func (iu *ItemUpdate) RemoveAttachments(a ...*Attachment) *ItemUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (iu *ItemUpdate) Save(ctx context.Context) (int, error) {
-	var (
-		err      error
-		affected int
-	)
 	iu.defaults()
-	if len(iu.hooks) == 0 {
-		if err = iu.check(); err != nil {
-			return 0, err
-		}
-		affected, err = iu.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*ItemMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = iu.check(); err != nil {
-				return 0, err
-			}
-			iu.mutation = mutation
-			affected, err = iu.sqlSave(ctx)
-			mutation.done = true
-			return affected, err
-		})
-		for i := len(iu.hooks) - 1; i >= 0; i-- {
-			if iu.hooks[i] == nil {
-				return 0, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = iu.hooks[i](mut)
-		}
-		if _, err := mut.Mutate(ctx, iu.mutation); err != nil {
-			return 0, err
-		}
-	}
-	return affected, err
+	return withHooks(ctx, iu.sqlSave, iu.mutation, iu.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -688,6 +733,11 @@ func (iu *ItemUpdate) check() error {
 			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "Item.description": %w`, err)}
 		}
 	}
+	if v, ok := iu.mutation.ImportRef(); ok {
+		if err := item.ImportRefValidator(v); err != nil {
+			return &ValidationError{Name: "import_ref", err: fmt.Errorf(`ent: validator failed for field "Item.import_ref": %w`, err)}
+		}
+	}
 	if v, ok := iu.mutation.Notes(); ok {
 		if err := item.NotesValidator(v); err != nil {
 			return &ValidationError{Name: "notes", err: fmt.Errorf(`ent: validator failed for field "Item.notes": %w`, err)}
@@ -725,16 +775,10 @@ func (iu *ItemUpdate) check() error {
 }
 
 func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   item.Table,
-			Columns: item.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: item.FieldID,
-			},
-		},
+	if err := iu.check(); err != nil {
+		return n, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(item.Table, item.Columns, sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID))
 	if ps := iu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -743,243 +787,150 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 	}
 	if value, ok := iu.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: item.FieldUpdatedAt,
-		})
+		_spec.SetField(item.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := iu.mutation.Name(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldName,
-		})
+		_spec.SetField(item.FieldName, field.TypeString, value)
 	}
 	if value, ok := iu.mutation.Description(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldDescription,
-		})
+		_spec.SetField(item.FieldDescription, field.TypeString, value)
 	}
 	if iu.mutation.DescriptionCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldDescription,
-		})
+		_spec.ClearField(item.FieldDescription, field.TypeString)
+	}
+	if value, ok := iu.mutation.ImportRef(); ok {
+		_spec.SetField(item.FieldImportRef, field.TypeString, value)
 	}
 	if iu.mutation.ImportRefCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldImportRef,
-		})
+		_spec.ClearField(item.FieldImportRef, field.TypeString)
 	}
 	if value, ok := iu.mutation.Notes(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldNotes,
-		})
+		_spec.SetField(item.FieldNotes, field.TypeString, value)
 	}
 	if iu.mutation.NotesCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldNotes,
-		})
+		_spec.ClearField(item.FieldNotes, field.TypeString)
 	}
 	if value, ok := iu.mutation.Quantity(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: item.FieldQuantity,
-		})
+		_spec.SetField(item.FieldQuantity, field.TypeInt, value)
 	}
 	if value, ok := iu.mutation.AddedQuantity(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: item.FieldQuantity,
-		})
+		_spec.AddField(item.FieldQuantity, field.TypeInt, value)
 	}
 	if value, ok := iu.mutation.Insured(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBool,
-			Value:  value,
-			Column: item.FieldInsured,
-		})
+		_spec.SetField(item.FieldInsured, field.TypeBool, value)
 	}
 	if value, ok := iu.mutation.Archived(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBool,
-			Value:  value,
-			Column: item.FieldArchived,
-		})
+		_spec.SetField(item.FieldArchived, field.TypeBool, value)
+	}
+	if value, ok := iu.mutation.AssetID(); ok {
+		_spec.SetField(item.FieldAssetID, field.TypeInt, value)
+	}
+	if value, ok := iu.mutation.AddedAssetID(); ok {
+		_spec.AddField(item.FieldAssetID, field.TypeInt, value)
 	}
 	if value, ok := iu.mutation.SerialNumber(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldSerialNumber,
-		})
+		_spec.SetField(item.FieldSerialNumber, field.TypeString, value)
 	}
 	if iu.mutation.SerialNumberCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldSerialNumber,
-		})
+		_spec.ClearField(item.FieldSerialNumber, field.TypeString)
 	}
 	if value, ok := iu.mutation.ModelNumber(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldModelNumber,
-		})
+		_spec.SetField(item.FieldModelNumber, field.TypeString, value)
 	}
 	if iu.mutation.ModelNumberCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldModelNumber,
-		})
+		_spec.ClearField(item.FieldModelNumber, field.TypeString)
 	}
 	if value, ok := iu.mutation.Manufacturer(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldManufacturer,
-		})
+		_spec.SetField(item.FieldManufacturer, field.TypeString, value)
 	}
 	if iu.mutation.ManufacturerCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldManufacturer,
-		})
+		_spec.ClearField(item.FieldManufacturer, field.TypeString)
 	}
 	if value, ok := iu.mutation.LifetimeWarranty(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBool,
-			Value:  value,
-			Column: item.FieldLifetimeWarranty,
-		})
+		_spec.SetField(item.FieldLifetimeWarranty, field.TypeBool, value)
 	}
 	if value, ok := iu.mutation.WarrantyExpires(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: item.FieldWarrantyExpires,
-		})
+		_spec.SetField(item.FieldWarrantyExpires, field.TypeTime, value)
 	}
 	if iu.mutation.WarrantyExpiresCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Column: item.FieldWarrantyExpires,
-		})
+		_spec.ClearField(item.FieldWarrantyExpires, field.TypeTime)
 	}
 	if value, ok := iu.mutation.WarrantyDetails(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldWarrantyDetails,
-		})
+		_spec.SetField(item.FieldWarrantyDetails, field.TypeString, value)
 	}
 	if iu.mutation.WarrantyDetailsCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldWarrantyDetails,
-		})
+		_spec.ClearField(item.FieldWarrantyDetails, field.TypeString)
 	}
 	if value, ok := iu.mutation.PurchaseTime(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: item.FieldPurchaseTime,
-		})
+		_spec.SetField(item.FieldPurchaseTime, field.TypeTime, value)
 	}
 	if iu.mutation.PurchaseTimeCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Column: item.FieldPurchaseTime,
-		})
+		_spec.ClearField(item.FieldPurchaseTime, field.TypeTime)
 	}
 	if value, ok := iu.mutation.PurchaseFrom(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldPurchaseFrom,
-		})
+		_spec.SetField(item.FieldPurchaseFrom, field.TypeString, value)
 	}
 	if iu.mutation.PurchaseFromCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldPurchaseFrom,
-		})
+		_spec.ClearField(item.FieldPurchaseFrom, field.TypeString)
 	}
 	if value, ok := iu.mutation.PurchasePrice(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeFloat64,
-			Value:  value,
-			Column: item.FieldPurchasePrice,
-		})
+		_spec.SetField(item.FieldPurchasePrice, field.TypeFloat64, value)
 	}
 	if value, ok := iu.mutation.AddedPurchasePrice(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeFloat64,
-			Value:  value,
-			Column: item.FieldPurchasePrice,
-		})
+		_spec.AddField(item.FieldPurchasePrice, field.TypeFloat64, value)
 	}
 	if value, ok := iu.mutation.SoldTime(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: item.FieldSoldTime,
-		})
+		_spec.SetField(item.FieldSoldTime, field.TypeTime, value)
 	}
 	if iu.mutation.SoldTimeCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Column: item.FieldSoldTime,
-		})
+		_spec.ClearField(item.FieldSoldTime, field.TypeTime)
 	}
 	if value, ok := iu.mutation.SoldTo(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldSoldTo,
-		})
+		_spec.SetField(item.FieldSoldTo, field.TypeString, value)
 	}
 	if iu.mutation.SoldToCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldSoldTo,
-		})
+		_spec.ClearField(item.FieldSoldTo, field.TypeString)
 	}
 	if value, ok := iu.mutation.SoldPrice(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeFloat64,
-			Value:  value,
-			Column: item.FieldSoldPrice,
-		})
+		_spec.SetField(item.FieldSoldPrice, field.TypeFloat64, value)
 	}
 	if value, ok := iu.mutation.AddedSoldPrice(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeFloat64,
-			Value:  value,
-			Column: item.FieldSoldPrice,
-		})
+		_spec.AddField(item.FieldSoldPrice, field.TypeFloat64, value)
 	}
 	if value, ok := iu.mutation.SoldNotes(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldSoldNotes,
-		})
+		_spec.SetField(item.FieldSoldNotes, field.TypeString, value)
 	}
 	if iu.mutation.SoldNotesCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldSoldNotes,
-		})
+		_spec.ClearField(item.FieldSoldNotes, field.TypeString)
+	}
+	if iu.mutation.GroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   item.GroupTable,
+			Columns: []string{item.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := iu.mutation.GroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   item.GroupTable,
+			Columns: []string{item.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if iu.mutation.ParentCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -989,10 +940,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -1005,10 +953,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1024,10 +969,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -1040,10 +982,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1059,45 +998,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if iu.mutation.GroupCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   item.GroupTable,
-			Columns: []string{item.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := iu.mutation.GroupIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   item.GroupTable,
-			Columns: []string{item.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1113,10 +1014,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: item.LabelPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: label.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(label.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -1129,10 +1027,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: item.LabelPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: label.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(label.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1148,10 +1043,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: item.LabelPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: label.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(label.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1167,10 +1059,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.LocationColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -1183,10 +1072,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.LocationColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1202,10 +1088,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.FieldsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: itemfield.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(itemfield.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -1218,10 +1101,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.FieldsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: itemfield.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(itemfield.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1237,10 +1117,52 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.FieldsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: itemfield.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(itemfield.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if iu.mutation.MaintenanceEntriesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   item.MaintenanceEntriesTable,
+			Columns: []string{item.MaintenanceEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(maintenanceentry.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := iu.mutation.RemovedMaintenanceEntriesIDs(); len(nodes) > 0 && !iu.mutation.MaintenanceEntriesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   item.MaintenanceEntriesTable,
+			Columns: []string{item.MaintenanceEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(maintenanceentry.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := iu.mutation.MaintenanceEntriesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   item.MaintenanceEntriesTable,
+			Columns: []string{item.MaintenanceEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(maintenanceentry.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1256,10 +1178,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -1272,10 +1191,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1291,10 +1207,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{item.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1310,6 +1223,7 @@ func (iu *ItemUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
+	iu.mutation.done = true
 	return n, nil
 }
 
@@ -1350,6 +1264,26 @@ func (iuo *ItemUpdateOne) SetNillableDescription(s *string) *ItemUpdateOne {
 // ClearDescription clears the value of the "description" field.
 func (iuo *ItemUpdateOne) ClearDescription() *ItemUpdateOne {
 	iuo.mutation.ClearDescription()
+	return iuo
+}
+
+// SetImportRef sets the "import_ref" field.
+func (iuo *ItemUpdateOne) SetImportRef(s string) *ItemUpdateOne {
+	iuo.mutation.SetImportRef(s)
+	return iuo
+}
+
+// SetNillableImportRef sets the "import_ref" field if the given value is not nil.
+func (iuo *ItemUpdateOne) SetNillableImportRef(s *string) *ItemUpdateOne {
+	if s != nil {
+		iuo.SetImportRef(*s)
+	}
+	return iuo
+}
+
+// ClearImportRef clears the value of the "import_ref" field.
+func (iuo *ItemUpdateOne) ClearImportRef() *ItemUpdateOne {
+	iuo.mutation.ClearImportRef()
 	return iuo
 }
 
@@ -1419,6 +1353,27 @@ func (iuo *ItemUpdateOne) SetNillableArchived(b *bool) *ItemUpdateOne {
 	if b != nil {
 		iuo.SetArchived(*b)
 	}
+	return iuo
+}
+
+// SetAssetID sets the "asset_id" field.
+func (iuo *ItemUpdateOne) SetAssetID(i int) *ItemUpdateOne {
+	iuo.mutation.ResetAssetID()
+	iuo.mutation.SetAssetID(i)
+	return iuo
+}
+
+// SetNillableAssetID sets the "asset_id" field if the given value is not nil.
+func (iuo *ItemUpdateOne) SetNillableAssetID(i *int) *ItemUpdateOne {
+	if i != nil {
+		iuo.SetAssetID(*i)
+	}
+	return iuo
+}
+
+// AddAssetID adds i to the "asset_id" field.
+func (iuo *ItemUpdateOne) AddAssetID(i int) *ItemUpdateOne {
+	iuo.mutation.AddAssetID(i)
 	return iuo
 }
 
@@ -1678,6 +1633,17 @@ func (iuo *ItemUpdateOne) ClearSoldNotes() *ItemUpdateOne {
 	return iuo
 }
 
+// SetGroupID sets the "group" edge to the Group entity by ID.
+func (iuo *ItemUpdateOne) SetGroupID(id uuid.UUID) *ItemUpdateOne {
+	iuo.mutation.SetGroupID(id)
+	return iuo
+}
+
+// SetGroup sets the "group" edge to the Group entity.
+func (iuo *ItemUpdateOne) SetGroup(g *Group) *ItemUpdateOne {
+	return iuo.SetGroupID(g.ID)
+}
+
 // SetParentID sets the "parent" edge to the Item entity by ID.
 func (iuo *ItemUpdateOne) SetParentID(id uuid.UUID) *ItemUpdateOne {
 	iuo.mutation.SetParentID(id)
@@ -1710,17 +1676,6 @@ func (iuo *ItemUpdateOne) AddChildren(i ...*Item) *ItemUpdateOne {
 		ids[j] = i[j].ID
 	}
 	return iuo.AddChildIDs(ids...)
-}
-
-// SetGroupID sets the "group" edge to the Group entity by ID.
-func (iuo *ItemUpdateOne) SetGroupID(id uuid.UUID) *ItemUpdateOne {
-	iuo.mutation.SetGroupID(id)
-	return iuo
-}
-
-// SetGroup sets the "group" edge to the Group entity.
-func (iuo *ItemUpdateOne) SetGroup(g *Group) *ItemUpdateOne {
-	return iuo.SetGroupID(g.ID)
 }
 
 // AddLabelIDs adds the "label" edge to the Label entity by IDs.
@@ -1772,6 +1727,21 @@ func (iuo *ItemUpdateOne) AddFields(i ...*ItemField) *ItemUpdateOne {
 	return iuo.AddFieldIDs(ids...)
 }
 
+// AddMaintenanceEntryIDs adds the "maintenance_entries" edge to the MaintenanceEntry entity by IDs.
+func (iuo *ItemUpdateOne) AddMaintenanceEntryIDs(ids ...uuid.UUID) *ItemUpdateOne {
+	iuo.mutation.AddMaintenanceEntryIDs(ids...)
+	return iuo
+}
+
+// AddMaintenanceEntries adds the "maintenance_entries" edges to the MaintenanceEntry entity.
+func (iuo *ItemUpdateOne) AddMaintenanceEntries(m ...*MaintenanceEntry) *ItemUpdateOne {
+	ids := make([]uuid.UUID, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return iuo.AddMaintenanceEntryIDs(ids...)
+}
+
 // AddAttachmentIDs adds the "attachments" edge to the Attachment entity by IDs.
 func (iuo *ItemUpdateOne) AddAttachmentIDs(ids ...uuid.UUID) *ItemUpdateOne {
 	iuo.mutation.AddAttachmentIDs(ids...)
@@ -1790,6 +1760,12 @@ func (iuo *ItemUpdateOne) AddAttachments(a ...*Attachment) *ItemUpdateOne {
 // Mutation returns the ItemMutation object of the builder.
 func (iuo *ItemUpdateOne) Mutation() *ItemMutation {
 	return iuo.mutation
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (iuo *ItemUpdateOne) ClearGroup() *ItemUpdateOne {
+	iuo.mutation.ClearGroup()
+	return iuo
 }
 
 // ClearParent clears the "parent" edge to the Item entity.
@@ -1817,12 +1793,6 @@ func (iuo *ItemUpdateOne) RemoveChildren(i ...*Item) *ItemUpdateOne {
 		ids[j] = i[j].ID
 	}
 	return iuo.RemoveChildIDs(ids...)
-}
-
-// ClearGroup clears the "group" edge to the Group entity.
-func (iuo *ItemUpdateOne) ClearGroup() *ItemUpdateOne {
-	iuo.mutation.ClearGroup()
-	return iuo
 }
 
 // ClearLabel clears all "label" edges to the Label entity.
@@ -1873,6 +1843,27 @@ func (iuo *ItemUpdateOne) RemoveFields(i ...*ItemField) *ItemUpdateOne {
 	return iuo.RemoveFieldIDs(ids...)
 }
 
+// ClearMaintenanceEntries clears all "maintenance_entries" edges to the MaintenanceEntry entity.
+func (iuo *ItemUpdateOne) ClearMaintenanceEntries() *ItemUpdateOne {
+	iuo.mutation.ClearMaintenanceEntries()
+	return iuo
+}
+
+// RemoveMaintenanceEntryIDs removes the "maintenance_entries" edge to MaintenanceEntry entities by IDs.
+func (iuo *ItemUpdateOne) RemoveMaintenanceEntryIDs(ids ...uuid.UUID) *ItemUpdateOne {
+	iuo.mutation.RemoveMaintenanceEntryIDs(ids...)
+	return iuo
+}
+
+// RemoveMaintenanceEntries removes "maintenance_entries" edges to MaintenanceEntry entities.
+func (iuo *ItemUpdateOne) RemoveMaintenanceEntries(m ...*MaintenanceEntry) *ItemUpdateOne {
+	ids := make([]uuid.UUID, len(m))
+	for i := range m {
+		ids[i] = m[i].ID
+	}
+	return iuo.RemoveMaintenanceEntryIDs(ids...)
+}
+
 // ClearAttachments clears all "attachments" edges to the Attachment entity.
 func (iuo *ItemUpdateOne) ClearAttachments() *ItemUpdateOne {
 	iuo.mutation.ClearAttachments()
@@ -1894,6 +1885,12 @@ func (iuo *ItemUpdateOne) RemoveAttachments(a ...*Attachment) *ItemUpdateOne {
 	return iuo.RemoveAttachmentIDs(ids...)
 }
 
+// Where appends a list predicates to the ItemUpdate builder.
+func (iuo *ItemUpdateOne) Where(ps ...predicate.Item) *ItemUpdateOne {
+	iuo.mutation.Where(ps...)
+	return iuo
+}
+
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
 func (iuo *ItemUpdateOne) Select(field string, fields ...string) *ItemUpdateOne {
@@ -1903,47 +1900,8 @@ func (iuo *ItemUpdateOne) Select(field string, fields ...string) *ItemUpdateOne 
 
 // Save executes the query and returns the updated Item entity.
 func (iuo *ItemUpdateOne) Save(ctx context.Context) (*Item, error) {
-	var (
-		err  error
-		node *Item
-	)
 	iuo.defaults()
-	if len(iuo.hooks) == 0 {
-		if err = iuo.check(); err != nil {
-			return nil, err
-		}
-		node, err = iuo.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*ItemMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = iuo.check(); err != nil {
-				return nil, err
-			}
-			iuo.mutation = mutation
-			node, err = iuo.sqlSave(ctx)
-			mutation.done = true
-			return node, err
-		})
-		for i := len(iuo.hooks) - 1; i >= 0; i-- {
-			if iuo.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = iuo.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, iuo.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*Item)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from ItemMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, iuo.sqlSave, iuo.mutation, iuo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -1988,6 +1946,11 @@ func (iuo *ItemUpdateOne) check() error {
 			return &ValidationError{Name: "description", err: fmt.Errorf(`ent: validator failed for field "Item.description": %w`, err)}
 		}
 	}
+	if v, ok := iuo.mutation.ImportRef(); ok {
+		if err := item.ImportRefValidator(v); err != nil {
+			return &ValidationError{Name: "import_ref", err: fmt.Errorf(`ent: validator failed for field "Item.import_ref": %w`, err)}
+		}
+	}
 	if v, ok := iuo.mutation.Notes(); ok {
 		if err := item.NotesValidator(v); err != nil {
 			return &ValidationError{Name: "notes", err: fmt.Errorf(`ent: validator failed for field "Item.notes": %w`, err)}
@@ -2025,16 +1988,10 @@ func (iuo *ItemUpdateOne) check() error {
 }
 
 func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   item.Table,
-			Columns: item.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: item.FieldID,
-			},
-		},
+	if err := iuo.check(); err != nil {
+		return _node, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(item.Table, item.Columns, sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID))
 	id, ok := iuo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Item.id" for update`)}
@@ -2060,243 +2017,150 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 		}
 	}
 	if value, ok := iuo.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: item.FieldUpdatedAt,
-		})
+		_spec.SetField(item.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := iuo.mutation.Name(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldName,
-		})
+		_spec.SetField(item.FieldName, field.TypeString, value)
 	}
 	if value, ok := iuo.mutation.Description(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldDescription,
-		})
+		_spec.SetField(item.FieldDescription, field.TypeString, value)
 	}
 	if iuo.mutation.DescriptionCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldDescription,
-		})
+		_spec.ClearField(item.FieldDescription, field.TypeString)
+	}
+	if value, ok := iuo.mutation.ImportRef(); ok {
+		_spec.SetField(item.FieldImportRef, field.TypeString, value)
 	}
 	if iuo.mutation.ImportRefCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldImportRef,
-		})
+		_spec.ClearField(item.FieldImportRef, field.TypeString)
 	}
 	if value, ok := iuo.mutation.Notes(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldNotes,
-		})
+		_spec.SetField(item.FieldNotes, field.TypeString, value)
 	}
 	if iuo.mutation.NotesCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldNotes,
-		})
+		_spec.ClearField(item.FieldNotes, field.TypeString)
 	}
 	if value, ok := iuo.mutation.Quantity(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: item.FieldQuantity,
-		})
+		_spec.SetField(item.FieldQuantity, field.TypeInt, value)
 	}
 	if value, ok := iuo.mutation.AddedQuantity(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: item.FieldQuantity,
-		})
+		_spec.AddField(item.FieldQuantity, field.TypeInt, value)
 	}
 	if value, ok := iuo.mutation.Insured(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBool,
-			Value:  value,
-			Column: item.FieldInsured,
-		})
+		_spec.SetField(item.FieldInsured, field.TypeBool, value)
 	}
 	if value, ok := iuo.mutation.Archived(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBool,
-			Value:  value,
-			Column: item.FieldArchived,
-		})
+		_spec.SetField(item.FieldArchived, field.TypeBool, value)
+	}
+	if value, ok := iuo.mutation.AssetID(); ok {
+		_spec.SetField(item.FieldAssetID, field.TypeInt, value)
+	}
+	if value, ok := iuo.mutation.AddedAssetID(); ok {
+		_spec.AddField(item.FieldAssetID, field.TypeInt, value)
 	}
 	if value, ok := iuo.mutation.SerialNumber(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldSerialNumber,
-		})
+		_spec.SetField(item.FieldSerialNumber, field.TypeString, value)
 	}
 	if iuo.mutation.SerialNumberCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldSerialNumber,
-		})
+		_spec.ClearField(item.FieldSerialNumber, field.TypeString)
 	}
 	if value, ok := iuo.mutation.ModelNumber(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldModelNumber,
-		})
+		_spec.SetField(item.FieldModelNumber, field.TypeString, value)
 	}
 	if iuo.mutation.ModelNumberCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldModelNumber,
-		})
+		_spec.ClearField(item.FieldModelNumber, field.TypeString)
 	}
 	if value, ok := iuo.mutation.Manufacturer(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldManufacturer,
-		})
+		_spec.SetField(item.FieldManufacturer, field.TypeString, value)
 	}
 	if iuo.mutation.ManufacturerCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldManufacturer,
-		})
+		_spec.ClearField(item.FieldManufacturer, field.TypeString)
 	}
 	if value, ok := iuo.mutation.LifetimeWarranty(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBool,
-			Value:  value,
-			Column: item.FieldLifetimeWarranty,
-		})
+		_spec.SetField(item.FieldLifetimeWarranty, field.TypeBool, value)
 	}
 	if value, ok := iuo.mutation.WarrantyExpires(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: item.FieldWarrantyExpires,
-		})
+		_spec.SetField(item.FieldWarrantyExpires, field.TypeTime, value)
 	}
 	if iuo.mutation.WarrantyExpiresCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Column: item.FieldWarrantyExpires,
-		})
+		_spec.ClearField(item.FieldWarrantyExpires, field.TypeTime)
 	}
 	if value, ok := iuo.mutation.WarrantyDetails(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldWarrantyDetails,
-		})
+		_spec.SetField(item.FieldWarrantyDetails, field.TypeString, value)
 	}
 	if iuo.mutation.WarrantyDetailsCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldWarrantyDetails,
-		})
+		_spec.ClearField(item.FieldWarrantyDetails, field.TypeString)
 	}
 	if value, ok := iuo.mutation.PurchaseTime(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: item.FieldPurchaseTime,
-		})
+		_spec.SetField(item.FieldPurchaseTime, field.TypeTime, value)
 	}
 	if iuo.mutation.PurchaseTimeCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Column: item.FieldPurchaseTime,
-		})
+		_spec.ClearField(item.FieldPurchaseTime, field.TypeTime)
 	}
 	if value, ok := iuo.mutation.PurchaseFrom(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldPurchaseFrom,
-		})
+		_spec.SetField(item.FieldPurchaseFrom, field.TypeString, value)
 	}
 	if iuo.mutation.PurchaseFromCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldPurchaseFrom,
-		})
+		_spec.ClearField(item.FieldPurchaseFrom, field.TypeString)
 	}
 	if value, ok := iuo.mutation.PurchasePrice(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeFloat64,
-			Value:  value,
-			Column: item.FieldPurchasePrice,
-		})
+		_spec.SetField(item.FieldPurchasePrice, field.TypeFloat64, value)
 	}
 	if value, ok := iuo.mutation.AddedPurchasePrice(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeFloat64,
-			Value:  value,
-			Column: item.FieldPurchasePrice,
-		})
+		_spec.AddField(item.FieldPurchasePrice, field.TypeFloat64, value)
 	}
 	if value, ok := iuo.mutation.SoldTime(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: item.FieldSoldTime,
-		})
+		_spec.SetField(item.FieldSoldTime, field.TypeTime, value)
 	}
 	if iuo.mutation.SoldTimeCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Column: item.FieldSoldTime,
-		})
+		_spec.ClearField(item.FieldSoldTime, field.TypeTime)
 	}
 	if value, ok := iuo.mutation.SoldTo(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldSoldTo,
-		})
+		_spec.SetField(item.FieldSoldTo, field.TypeString, value)
 	}
 	if iuo.mutation.SoldToCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldSoldTo,
-		})
+		_spec.ClearField(item.FieldSoldTo, field.TypeString)
 	}
 	if value, ok := iuo.mutation.SoldPrice(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeFloat64,
-			Value:  value,
-			Column: item.FieldSoldPrice,
-		})
+		_spec.SetField(item.FieldSoldPrice, field.TypeFloat64, value)
 	}
 	if value, ok := iuo.mutation.AddedSoldPrice(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeFloat64,
-			Value:  value,
-			Column: item.FieldSoldPrice,
-		})
+		_spec.AddField(item.FieldSoldPrice, field.TypeFloat64, value)
 	}
 	if value, ok := iuo.mutation.SoldNotes(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: item.FieldSoldNotes,
-		})
+		_spec.SetField(item.FieldSoldNotes, field.TypeString, value)
 	}
 	if iuo.mutation.SoldNotesCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: item.FieldSoldNotes,
-		})
+		_spec.ClearField(item.FieldSoldNotes, field.TypeString)
+	}
+	if iuo.mutation.GroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   item.GroupTable,
+			Columns: []string{item.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := iuo.mutation.GroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   item.GroupTable,
+			Columns: []string{item.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if iuo.mutation.ParentCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -2306,10 +2170,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -2322,10 +2183,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -2341,10 +2199,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -2357,10 +2212,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -2376,45 +2228,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if iuo.mutation.GroupCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   item.GroupTable,
-			Columns: []string{item.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := iuo.mutation.GroupIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   item.GroupTable,
-			Columns: []string{item.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -2430,10 +2244,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: item.LabelPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: label.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(label.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -2446,10 +2257,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: item.LabelPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: label.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(label.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -2465,10 +2273,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: item.LabelPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: label.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(label.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -2484,10 +2289,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.LocationColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -2500,10 +2302,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.LocationColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -2519,10 +2318,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.FieldsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: itemfield.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(itemfield.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -2535,10 +2331,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.FieldsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: itemfield.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(itemfield.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -2554,10 +2347,52 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.FieldsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: itemfield.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(itemfield.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if iuo.mutation.MaintenanceEntriesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   item.MaintenanceEntriesTable,
+			Columns: []string{item.MaintenanceEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(maintenanceentry.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := iuo.mutation.RemovedMaintenanceEntriesIDs(); len(nodes) > 0 && !iuo.mutation.MaintenanceEntriesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   item.MaintenanceEntriesTable,
+			Columns: []string{item.MaintenanceEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(maintenanceentry.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := iuo.mutation.MaintenanceEntriesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   item.MaintenanceEntriesTable,
+			Columns: []string{item.MaintenanceEntriesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(maintenanceentry.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -2573,10 +2408,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -2589,10 +2421,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -2608,10 +2437,7 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 			Columns: []string{item.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -2630,5 +2456,6 @@ func (iuo *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) 
 		}
 		return nil, err
 	}
+	iuo.mutation.done = true
 	return _node, nil
 }

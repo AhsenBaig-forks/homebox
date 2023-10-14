@@ -1,6 +1,9 @@
 package repo
 
-import "github.com/hay-kot/homebox/backend/internal/data/ent"
+import (
+	"github.com/hay-kot/homebox/backend/internal/core/services/reporting/eventbus"
+	"github.com/hay-kot/homebox/backend/internal/data/ent"
+)
 
 // AllRepos is a container for all the repository interfaces
 type AllRepos struct {
@@ -11,20 +14,22 @@ type AllRepos struct {
 	Labels      *LabelRepository
 	Items       *ItemsRepository
 	Docs        *DocumentRepository
-	DocTokens   *DocumentTokensRepository
 	Attachments *AttachmentRepo
+	MaintEntry  *MaintenanceEntryRepository
+	Notifiers   *NotifierRepository
 }
 
-func New(db *ent.Client, root string) *AllRepos {
+func New(db *ent.Client, bus *eventbus.EventBus, root string) *AllRepos {
 	return &AllRepos{
 		Users:       &UserRepository{db},
 		AuthTokens:  &TokenRepository{db},
-		Groups:      &GroupRepository{db},
-		Locations:   &LocationRepository{db},
-		Labels:      &LabelRepository{db},
-		Items:       &ItemsRepository{db},
+		Groups:      NewGroupRepository(db),
+		Locations:   &LocationRepository{db, bus},
+		Labels:      &LabelRepository{db, bus},
+		Items:       &ItemsRepository{db, bus},
 		Docs:        &DocumentRepository{db, root},
-		DocTokens:   &DocumentTokensRepository{db},
 		Attachments: &AttachmentRepo{db},
+		MaintEntry:  &MaintenanceEntryRepository{db},
+		Notifiers:   NewNotifierRepository(db),
 	}
 }

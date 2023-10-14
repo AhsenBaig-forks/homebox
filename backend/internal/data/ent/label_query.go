@@ -21,11 +21,9 @@ import (
 // LabelQuery is the builder for querying Label entities.
 type LabelQuery struct {
 	config
-	limit      *int
-	offset     *int
-	unique     *bool
-	order      []OrderFunc
-	fields     []string
+	ctx        *QueryContext
+	order      []label.OrderOption
+	inters     []Interceptor
 	predicates []predicate.Label
 	withGroup  *GroupQuery
 	withItems  *ItemQuery
@@ -41,34 +39,34 @@ func (lq *LabelQuery) Where(ps ...predicate.Label) *LabelQuery {
 	return lq
 }
 
-// Limit adds a limit step to the query.
+// Limit the number of records to be returned by this query.
 func (lq *LabelQuery) Limit(limit int) *LabelQuery {
-	lq.limit = &limit
+	lq.ctx.Limit = &limit
 	return lq
 }
 
-// Offset adds an offset step to the query.
+// Offset to start from.
 func (lq *LabelQuery) Offset(offset int) *LabelQuery {
-	lq.offset = &offset
+	lq.ctx.Offset = &offset
 	return lq
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
 func (lq *LabelQuery) Unique(unique bool) *LabelQuery {
-	lq.unique = &unique
+	lq.ctx.Unique = &unique
 	return lq
 }
 
-// Order adds an order step to the query.
-func (lq *LabelQuery) Order(o ...OrderFunc) *LabelQuery {
+// Order specifies how the records should be ordered.
+func (lq *LabelQuery) Order(o ...label.OrderOption) *LabelQuery {
 	lq.order = append(lq.order, o...)
 	return lq
 }
 
 // QueryGroup chains the current query on the "group" edge.
 func (lq *LabelQuery) QueryGroup() *GroupQuery {
-	query := &GroupQuery{config: lq.config}
+	query := (&GroupClient{config: lq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := lq.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -90,7 +88,7 @@ func (lq *LabelQuery) QueryGroup() *GroupQuery {
 
 // QueryItems chains the current query on the "items" edge.
 func (lq *LabelQuery) QueryItems() *ItemQuery {
-	query := &ItemQuery{config: lq.config}
+	query := (&ItemClient{config: lq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := lq.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -113,7 +111,7 @@ func (lq *LabelQuery) QueryItems() *ItemQuery {
 // First returns the first Label entity from the query.
 // Returns a *NotFoundError when no Label was found.
 func (lq *LabelQuery) First(ctx context.Context) (*Label, error) {
-	nodes, err := lq.Limit(1).All(ctx)
+	nodes, err := lq.Limit(1).All(setContextOp(ctx, lq.ctx, "First"))
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +134,7 @@ func (lq *LabelQuery) FirstX(ctx context.Context) *Label {
 // Returns a *NotFoundError when no Label ID was found.
 func (lq *LabelQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
 	var ids []uuid.UUID
-	if ids, err = lq.Limit(1).IDs(ctx); err != nil {
+	if ids, err = lq.Limit(1).IDs(setContextOp(ctx, lq.ctx, "FirstID")); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -159,7 +157,7 @@ func (lq *LabelQuery) FirstIDX(ctx context.Context) uuid.UUID {
 // Returns a *NotSingularError when more than one Label entity is found.
 // Returns a *NotFoundError when no Label entities are found.
 func (lq *LabelQuery) Only(ctx context.Context) (*Label, error) {
-	nodes, err := lq.Limit(2).All(ctx)
+	nodes, err := lq.Limit(2).All(setContextOp(ctx, lq.ctx, "Only"))
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +185,7 @@ func (lq *LabelQuery) OnlyX(ctx context.Context) *Label {
 // Returns a *NotFoundError when no entities are found.
 func (lq *LabelQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
 	var ids []uuid.UUID
-	if ids, err = lq.Limit(2).IDs(ctx); err != nil {
+	if ids, err = lq.Limit(2).IDs(setContextOp(ctx, lq.ctx, "OnlyID")); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -212,10 +210,12 @@ func (lq *LabelQuery) OnlyIDX(ctx context.Context) uuid.UUID {
 
 // All executes the query and returns a list of Labels.
 func (lq *LabelQuery) All(ctx context.Context) ([]*Label, error) {
+	ctx = setContextOp(ctx, lq.ctx, "All")
 	if err := lq.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	return lq.sqlAll(ctx)
+	qr := querierAll[[]*Label, *LabelQuery]()
+	return withInterceptors[[]*Label](ctx, lq, qr, lq.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -228,9 +228,12 @@ func (lq *LabelQuery) AllX(ctx context.Context) []*Label {
 }
 
 // IDs executes the query and returns a list of Label IDs.
-func (lq *LabelQuery) IDs(ctx context.Context) ([]uuid.UUID, error) {
-	var ids []uuid.UUID
-	if err := lq.Select(label.FieldID).Scan(ctx, &ids); err != nil {
+func (lq *LabelQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+	if lq.ctx.Unique == nil && lq.path != nil {
+		lq.Unique(true)
+	}
+	ctx = setContextOp(ctx, lq.ctx, "IDs")
+	if err = lq.Select(label.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
@@ -247,10 +250,11 @@ func (lq *LabelQuery) IDsX(ctx context.Context) []uuid.UUID {
 
 // Count returns the count of the given query.
 func (lq *LabelQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, lq.ctx, "Count")
 	if err := lq.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return lq.sqlCount(ctx)
+	return withInterceptors[int](ctx, lq, querierCount[*LabelQuery](), lq.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -264,10 +268,15 @@ func (lq *LabelQuery) CountX(ctx context.Context) int {
 
 // Exist returns true if the query has elements in the graph.
 func (lq *LabelQuery) Exist(ctx context.Context) (bool, error) {
-	if err := lq.prepareQuery(ctx); err != nil {
-		return false, err
+	ctx = setContextOp(ctx, lq.ctx, "Exist")
+	switch _, err := lq.FirstID(ctx); {
+	case IsNotFound(err):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("ent: check existence: %w", err)
+	default:
+		return true, nil
 	}
-	return lq.sqlExist(ctx)
 }
 
 // ExistX is like Exist, but panics if an error occurs.
@@ -287,23 +296,22 @@ func (lq *LabelQuery) Clone() *LabelQuery {
 	}
 	return &LabelQuery{
 		config:     lq.config,
-		limit:      lq.limit,
-		offset:     lq.offset,
-		order:      append([]OrderFunc{}, lq.order...),
+		ctx:        lq.ctx.Clone(),
+		order:      append([]label.OrderOption{}, lq.order...),
+		inters:     append([]Interceptor{}, lq.inters...),
 		predicates: append([]predicate.Label{}, lq.predicates...),
 		withGroup:  lq.withGroup.Clone(),
 		withItems:  lq.withItems.Clone(),
 		// clone intermediate query.
-		sql:    lq.sql.Clone(),
-		path:   lq.path,
-		unique: lq.unique,
+		sql:  lq.sql.Clone(),
+		path: lq.path,
 	}
 }
 
 // WithGroup tells the query-builder to eager-load the nodes that are connected to
 // the "group" edge. The optional arguments are used to configure the query builder of the edge.
 func (lq *LabelQuery) WithGroup(opts ...func(*GroupQuery)) *LabelQuery {
-	query := &GroupQuery{config: lq.config}
+	query := (&GroupClient{config: lq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
@@ -314,7 +322,7 @@ func (lq *LabelQuery) WithGroup(opts ...func(*GroupQuery)) *LabelQuery {
 // WithItems tells the query-builder to eager-load the nodes that are connected to
 // the "items" edge. The optional arguments are used to configure the query builder of the edge.
 func (lq *LabelQuery) WithItems(opts ...func(*ItemQuery)) *LabelQuery {
-	query := &ItemQuery{config: lq.config}
+	query := (&ItemClient{config: lq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
@@ -337,16 +345,11 @@ func (lq *LabelQuery) WithItems(opts ...func(*ItemQuery)) *LabelQuery {
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (lq *LabelQuery) GroupBy(field string, fields ...string) *LabelGroupBy {
-	grbuild := &LabelGroupBy{config: lq.config}
-	grbuild.fields = append([]string{field}, fields...)
-	grbuild.path = func(ctx context.Context) (prev *sql.Selector, err error) {
-		if err := lq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		return lq.sqlQuery(ctx), nil
-	}
+	lq.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &LabelGroupBy{build: lq}
+	grbuild.flds = &lq.ctx.Fields
 	grbuild.label = label.Label
-	grbuild.flds, grbuild.scan = &grbuild.fields, grbuild.Scan
+	grbuild.scan = grbuild.Scan
 	return grbuild
 }
 
@@ -363,15 +366,30 @@ func (lq *LabelQuery) GroupBy(field string, fields ...string) *LabelGroupBy {
 //		Select(label.FieldCreatedAt).
 //		Scan(ctx, &v)
 func (lq *LabelQuery) Select(fields ...string) *LabelSelect {
-	lq.fields = append(lq.fields, fields...)
-	selbuild := &LabelSelect{LabelQuery: lq}
-	selbuild.label = label.Label
-	selbuild.flds, selbuild.scan = &lq.fields, selbuild.Scan
-	return selbuild
+	lq.ctx.Fields = append(lq.ctx.Fields, fields...)
+	sbuild := &LabelSelect{LabelQuery: lq}
+	sbuild.label = label.Label
+	sbuild.flds, sbuild.scan = &lq.ctx.Fields, sbuild.Scan
+	return sbuild
+}
+
+// Aggregate returns a LabelSelect configured with the given aggregations.
+func (lq *LabelQuery) Aggregate(fns ...AggregateFunc) *LabelSelect {
+	return lq.Select().Aggregate(fns...)
 }
 
 func (lq *LabelQuery) prepareQuery(ctx context.Context) error {
-	for _, f := range lq.fields {
+	for _, inter := range lq.inters {
+		if inter == nil {
+			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
+		}
+		if trv, ok := inter.(Traverser); ok {
+			if err := trv.Traverse(ctx, lq); err != nil {
+				return err
+			}
+		}
+	}
+	for _, f := range lq.ctx.Fields {
 		if !label.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
@@ -449,6 +467,9 @@ func (lq *LabelQuery) loadGroup(ctx context.Context, query *GroupQuery, nodes []
 		}
 		nodeids[fk] = append(nodeids[fk], nodes[i])
 	}
+	if len(ids) == 0 {
+		return nil
+	}
 	query.Where(group.IDIn(ids...))
 	neighbors, err := query.All(ctx)
 	if err != nil {
@@ -488,27 +509,30 @@ func (lq *LabelQuery) loadItems(ctx context.Context, query *ItemQuery, nodes []*
 	if err := query.prepareQuery(ctx); err != nil {
 		return err
 	}
-	neighbors, err := query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
-		assign := spec.Assign
-		values := spec.ScanValues
-		spec.ScanValues = func(columns []string) ([]any, error) {
-			values, err := values(columns[1:])
-			if err != nil {
-				return nil, err
+	qr := QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
+		return query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
+			assign := spec.Assign
+			values := spec.ScanValues
+			spec.ScanValues = func(columns []string) ([]any, error) {
+				values, err := values(columns[1:])
+				if err != nil {
+					return nil, err
+				}
+				return append([]any{new(uuid.UUID)}, values...), nil
 			}
-			return append([]any{new(uuid.UUID)}, values...), nil
-		}
-		spec.Assign = func(columns []string, values []any) error {
-			outValue := *values[0].(*uuid.UUID)
-			inValue := *values[1].(*uuid.UUID)
-			if nids[inValue] == nil {
-				nids[inValue] = map[*Label]struct{}{byID[outValue]: struct{}{}}
-				return assign(columns[1:], values[1:])
+			spec.Assign = func(columns []string, values []any) error {
+				outValue := *values[0].(*uuid.UUID)
+				inValue := *values[1].(*uuid.UUID)
+				if nids[inValue] == nil {
+					nids[inValue] = map[*Label]struct{}{byID[outValue]: {}}
+					return assign(columns[1:], values[1:])
+				}
+				nids[inValue][byID[outValue]] = struct{}{}
+				return nil
 			}
-			nids[inValue][byID[outValue]] = struct{}{}
-			return nil
-		}
+		})
 	})
+	neighbors, err := withInterceptors[[]*Item](ctx, query, qr, query.inters)
 	if err != nil {
 		return err
 	}
@@ -526,41 +550,22 @@ func (lq *LabelQuery) loadItems(ctx context.Context, query *ItemQuery, nodes []*
 
 func (lq *LabelQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := lq.querySpec()
-	_spec.Node.Columns = lq.fields
-	if len(lq.fields) > 0 {
-		_spec.Unique = lq.unique != nil && *lq.unique
+	_spec.Node.Columns = lq.ctx.Fields
+	if len(lq.ctx.Fields) > 0 {
+		_spec.Unique = lq.ctx.Unique != nil && *lq.ctx.Unique
 	}
 	return sqlgraph.CountNodes(ctx, lq.driver, _spec)
 }
 
-func (lq *LabelQuery) sqlExist(ctx context.Context) (bool, error) {
-	switch _, err := lq.FirstID(ctx); {
-	case IsNotFound(err):
-		return false, nil
-	case err != nil:
-		return false, fmt.Errorf("ent: check existence: %w", err)
-	default:
-		return true, nil
-	}
-}
-
 func (lq *LabelQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := &sqlgraph.QuerySpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   label.Table,
-			Columns: label.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: label.FieldID,
-			},
-		},
-		From:   lq.sql,
-		Unique: true,
-	}
-	if unique := lq.unique; unique != nil {
+	_spec := sqlgraph.NewQuerySpec(label.Table, label.Columns, sqlgraph.NewFieldSpec(label.FieldID, field.TypeUUID))
+	_spec.From = lq.sql
+	if unique := lq.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
+	} else if lq.path != nil {
+		_spec.Unique = true
 	}
-	if fields := lq.fields; len(fields) > 0 {
+	if fields := lq.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, label.FieldID)
 		for i := range fields {
@@ -576,10 +581,10 @@ func (lq *LabelQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if limit := lq.limit; limit != nil {
+	if limit := lq.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := lq.offset; offset != nil {
+	if offset := lq.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
 	if ps := lq.order; len(ps) > 0 {
@@ -595,7 +600,7 @@ func (lq *LabelQuery) querySpec() *sqlgraph.QuerySpec {
 func (lq *LabelQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(lq.driver.Dialect())
 	t1 := builder.Table(label.Table)
-	columns := lq.fields
+	columns := lq.ctx.Fields
 	if len(columns) == 0 {
 		columns = label.Columns
 	}
@@ -604,7 +609,7 @@ func (lq *LabelQuery) sqlQuery(ctx context.Context) *sql.Selector {
 		selector = lq.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if lq.unique != nil && *lq.unique {
+	if lq.ctx.Unique != nil && *lq.ctx.Unique {
 		selector.Distinct()
 	}
 	for _, p := range lq.predicates {
@@ -613,12 +618,12 @@ func (lq *LabelQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	for _, p := range lq.order {
 		p(selector)
 	}
-	if offset := lq.offset; offset != nil {
+	if offset := lq.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := lq.limit; limit != nil {
+	if limit := lq.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -626,13 +631,8 @@ func (lq *LabelQuery) sqlQuery(ctx context.Context) *sql.Selector {
 
 // LabelGroupBy is the group-by builder for Label entities.
 type LabelGroupBy struct {
-	config
 	selector
-	fields []string
-	fns    []AggregateFunc
-	// intermediate query (i.e. traversal path).
-	sql  *sql.Selector
-	path func(context.Context) (*sql.Selector, error)
+	build *LabelQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
@@ -641,74 +641,77 @@ func (lgb *LabelGroupBy) Aggregate(fns ...AggregateFunc) *LabelGroupBy {
 	return lgb
 }
 
-// Scan applies the group-by query and scans the result into the given value.
+// Scan applies the selector query and scans the result into the given value.
 func (lgb *LabelGroupBy) Scan(ctx context.Context, v any) error {
-	query, err := lgb.path(ctx)
-	if err != nil {
+	ctx = setContextOp(ctx, lgb.build.ctx, "GroupBy")
+	if err := lgb.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	lgb.sql = query
-	return lgb.sqlScan(ctx, v)
+	return scanWithInterceptors[*LabelQuery, *LabelGroupBy](ctx, lgb.build, lgb, lgb.build.inters, v)
 }
 
-func (lgb *LabelGroupBy) sqlScan(ctx context.Context, v any) error {
-	for _, f := range lgb.fields {
-		if !label.ValidColumn(f) {
-			return &ValidationError{Name: f, err: fmt.Errorf("invalid field %q for group-by", f)}
-		}
+func (lgb *LabelGroupBy) sqlScan(ctx context.Context, root *LabelQuery, v any) error {
+	selector := root.sqlQuery(ctx).Select()
+	aggregation := make([]string, 0, len(lgb.fns))
+	for _, fn := range lgb.fns {
+		aggregation = append(aggregation, fn(selector))
 	}
-	selector := lgb.sqlQuery()
+	if len(selector.SelectedColumns()) == 0 {
+		columns := make([]string, 0, len(*lgb.flds)+len(lgb.fns))
+		for _, f := range *lgb.flds {
+			columns = append(columns, selector.C(f))
+		}
+		columns = append(columns, aggregation...)
+		selector.Select(columns...)
+	}
+	selector.GroupBy(selector.Columns(*lgb.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := lgb.driver.Query(ctx, query, args, rows); err != nil {
+	if err := lgb.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
 }
 
-func (lgb *LabelGroupBy) sqlQuery() *sql.Selector {
-	selector := lgb.sql.Select()
-	aggregation := make([]string, 0, len(lgb.fns))
-	for _, fn := range lgb.fns {
-		aggregation = append(aggregation, fn(selector))
-	}
-	// If no columns were selected in a custom aggregation function, the default
-	// selection is the fields used for "group-by", and the aggregation functions.
-	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(lgb.fields)+len(lgb.fns))
-		for _, f := range lgb.fields {
-			columns = append(columns, selector.C(f))
-		}
-		columns = append(columns, aggregation...)
-		selector.Select(columns...)
-	}
-	return selector.GroupBy(selector.Columns(lgb.fields...)...)
-}
-
 // LabelSelect is the builder for selecting fields of Label entities.
 type LabelSelect struct {
 	*LabelQuery
 	selector
-	// intermediate query (i.e. traversal path).
-	sql *sql.Selector
+}
+
+// Aggregate adds the given aggregation functions to the selector query.
+func (ls *LabelSelect) Aggregate(fns ...AggregateFunc) *LabelSelect {
+	ls.fns = append(ls.fns, fns...)
+	return ls
 }
 
 // Scan applies the selector query and scans the result into the given value.
 func (ls *LabelSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, ls.ctx, "Select")
 	if err := ls.prepareQuery(ctx); err != nil {
 		return err
 	}
-	ls.sql = ls.LabelQuery.sqlQuery(ctx)
-	return ls.sqlScan(ctx, v)
+	return scanWithInterceptors[*LabelQuery, *LabelSelect](ctx, ls.LabelQuery, ls, ls.inters, v)
 }
 
-func (ls *LabelSelect) sqlScan(ctx context.Context, v any) error {
+func (ls *LabelSelect) sqlScan(ctx context.Context, root *LabelQuery, v any) error {
+	selector := root.sqlQuery(ctx)
+	aggregation := make([]string, 0, len(ls.fns))
+	for _, fn := range ls.fns {
+		aggregation = append(aggregation, fn(selector))
+	}
+	switch n := len(*ls.selector.flds); {
+	case n == 0 && len(aggregation) > 0:
+		selector.Select(aggregation...)
+	case n != 0 && len(aggregation) > 0:
+		selector.AppendSelect(aggregation...)
+	}
 	rows := &sql.Rows{}
-	query, args := ls.sql.Query()
+	query, args := selector.Query()
 	if err := ls.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}

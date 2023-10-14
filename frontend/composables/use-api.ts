@@ -1,10 +1,9 @@
 import { PublicApi } from "~~/lib/api/public";
 import { UserClient } from "~~/lib/api/user";
 import { Requests } from "~~/lib/requests";
-import { useAuthStore } from "~~/stores/auth";
 
 export type Observer = {
-  handler: (r: Response) => void;
+  handler: (r: Response, req?: RequestInit) => void;
 };
 
 export type RemoveObserver = () => void;
@@ -29,13 +28,17 @@ export function usePublicApi(): PublicApi {
 }
 
 export function useUserApi(): UserClient {
-  const authStore = useAuthStore();
+  const authCtx = useAuthContext();
 
-  const requests = new Requests("", () => authStore.token, {});
+  const requests = new Requests("", "", {});
   requests.addResponseInterceptor(logger);
   requests.addResponseInterceptor(r => {
     if (r.status === 401) {
-      authStore.clearSession();
+      console.error("unauthorized request, invalidating session");
+      authCtx.invalidateSession();
+      if (window.location.pathname !== "/") {
+        window.location.href = "/";
+      }
     }
   });
 
@@ -43,5 +46,5 @@ export function useUserApi(): UserClient {
     requests.addResponseInterceptor(observer.handler);
   }
 
-  return new UserClient(requests);
+  return new UserClient(requests, authCtx.attachmentToken || "");
 }

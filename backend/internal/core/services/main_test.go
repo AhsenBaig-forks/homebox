@@ -3,11 +3,10 @@ package services
 import (
 	"context"
 	"log"
-	"math/rand"
 	"os"
 	"testing"
-	"time"
 
+	"github.com/hay-kot/homebox/backend/internal/core/services/reporting/eventbus"
 	"github.com/hay-kot/homebox/backend/internal/data/ent"
 	"github.com/hay-kot/homebox/backend/internal/data/repo"
 	"github.com/hay-kot/homebox/backend/pkgs/faker"
@@ -15,7 +14,8 @@ import (
 )
 
 var (
-	fk = faker.NewFaker()
+	fk   = faker.NewFaker()
+	tbus = eventbus.New()
 
 	tCtx    = Context{}
 	tClient *ent.Client
@@ -49,8 +49,6 @@ func bootstrap() {
 }
 
 func TestMain(m *testing.M) {
-	rand.Seed(int64(time.Now().Unix()))
-
 	client, err := ent.Open("sqlite3", "file:ent?mode=memory&cache=shared&_fk=1")
 	if err != nil {
 		log.Fatalf("failed opening connection to sqlite: %v", err)
@@ -62,7 +60,7 @@ func TestMain(m *testing.M) {
 	}
 
 	tClient = client
-	tRepos = repo.New(tClient, os.TempDir()+"/homebox")
+	tRepos = repo.New(tClient, tbus, os.TempDir()+"/homebox")
 	tSvc = New(tRepos)
 	defer client.Close()
 

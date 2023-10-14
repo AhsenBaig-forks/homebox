@@ -7,8 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/hay-kot/homebox/backend/internal/data/ent/authroles"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/authtokens"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/user"
 )
@@ -30,15 +32,18 @@ type AuthTokens struct {
 	// The values are being populated by the AuthTokensQuery when eager-loading is set.
 	Edges            AuthTokensEdges `json:"edges"`
 	user_auth_tokens *uuid.UUID
+	selectValues     sql.SelectValues
 }
 
 // AuthTokensEdges holds the relations/edges for other nodes in the graph.
 type AuthTokensEdges struct {
 	// User holds the value of the user edge.
 	User *User `json:"user,omitempty"`
+	// Roles holds the value of the roles edge.
+	Roles *AuthRoles `json:"roles,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -52,6 +57,19 @@ func (e AuthTokensEdges) UserOrErr() (*User, error) {
 		return e.User, nil
 	}
 	return nil, &NotLoadedError{edge: "user"}
+}
+
+// RolesOrErr returns the Roles value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e AuthTokensEdges) RolesOrErr() (*AuthRoles, error) {
+	if e.loadedTypes[1] {
+		if e.Roles == nil {
+			// Edge was loaded but was not found.
+			return nil, &NotFoundError{label: authroles.Label}
+		}
+		return e.Roles, nil
+	}
+	return nil, &NotLoadedError{edge: "roles"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -68,7 +86,7 @@ func (*AuthTokens) scanValues(columns []string) ([]any, error) {
 		case authtokens.ForeignKeys[0]: // user_auth_tokens
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		default:
-			return nil, fmt.Errorf("unexpected column %q for type AuthTokens", columns[i])
+			values[i] = new(sql.UnknownType)
 		}
 	}
 	return values, nil
@@ -119,21 +137,34 @@ func (at *AuthTokens) assignValues(columns []string, values []any) error {
 				at.user_auth_tokens = new(uuid.UUID)
 				*at.user_auth_tokens = *value.S.(*uuid.UUID)
 			}
+		default:
+			at.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
 }
 
+// Value returns the ent.Value that was dynamically selected and assigned to the AuthTokens.
+// This includes values selected through modifiers, order, etc.
+func (at *AuthTokens) Value(name string) (ent.Value, error) {
+	return at.selectValues.Get(name)
+}
+
 // QueryUser queries the "user" edge of the AuthTokens entity.
 func (at *AuthTokens) QueryUser() *UserQuery {
-	return (&AuthTokensClient{config: at.config}).QueryUser(at)
+	return NewAuthTokensClient(at.config).QueryUser(at)
+}
+
+// QueryRoles queries the "roles" edge of the AuthTokens entity.
+func (at *AuthTokens) QueryRoles() *AuthRolesQuery {
+	return NewAuthTokensClient(at.config).QueryRoles(at)
 }
 
 // Update returns a builder for updating this AuthTokens.
 // Note that you need to call AuthTokens.Unwrap() before calling this method if this AuthTokens
 // was returned from a transaction, and the transaction was committed or rolled back.
 func (at *AuthTokens) Update() *AuthTokensUpdateOne {
-	return (&AuthTokensClient{config: at.config}).UpdateOne(at)
+	return NewAuthTokensClient(at.config).UpdateOne(at)
 }
 
 // Unwrap unwraps the AuthTokens entity that was returned from a transaction after it was closed,
@@ -169,9 +200,3 @@ func (at *AuthTokens) String() string {
 
 // AuthTokensSlice is a parsable slice of AuthTokens.
 type AuthTokensSlice []*AuthTokens
-
-func (at AuthTokensSlice) config(cfg config) {
-	for _i := range at {
-		at[_i].config = cfg
-	}
-}

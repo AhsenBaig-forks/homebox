@@ -1,5 +1,4 @@
 <script setup lang="ts">
-  import { Detail, CustomDetail } from "~~/components/global/DetailsSection/types";
   import { LocationSummary, LocationUpdate } from "~~/lib/api/types/data-contracts";
   import { useLocationStore } from "~~/stores/locations";
 
@@ -10,8 +9,6 @@
   const route = useRoute();
   const api = useUserApi();
   const toast = useNotifier();
-
-  const preferences = useViewPreferences();
 
   const locationId = computed<string>(() => route.params.id as string);
 
@@ -28,41 +25,6 @@
     }
 
     return data;
-  });
-
-  const details = computed<(Detail | CustomDetail)[]>(() => {
-    const details = [
-      {
-        name: "Name",
-        text: location.value?.name,
-      },
-      {
-        name: "Description",
-        text: location.value?.description,
-      },
-    ];
-
-    if (preferences.value.showDetails) {
-      return [
-        ...details,
-        {
-          name: "Created",
-          text: location.value?.createdAt,
-          type: "date",
-        },
-        {
-          name: "Updated",
-          text: location.value?.updatedAt,
-          type: "date",
-        },
-        {
-          name: "Database ID",
-          text: location.value?.id,
-        },
-      ];
-    }
-
-    return details;
   });
 
   const confirm = useConfirm();
@@ -106,6 +68,7 @@
     const { error, data } = await api.locations.update(locationId.value, updateData);
 
     if (error) {
+      updating.value = false;
       toast.error("Failed to update location");
       return;
     }
@@ -119,76 +82,89 @@
   const locationStore = useLocationStore();
   const locations = computed(() => locationStore.allLocations);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parent = ref<LocationSummary | any>({});
+
+  const items = computedAsync(async () => {
+    if (!location.value) {
+      return [];
+    }
+
+    const resp = await api.items.getAll({
+      locations: [location.value.id],
+    });
+
+    if (resp.error) {
+      toast.error("Failed to load items");
+      return [];
+    }
+
+    return resp.data.items;
+  });
 </script>
 
 <template>
   <div>
+    <!-- Update Dialog -->
     <BaseModal v-model="updateModal">
       <template #title> Update Location </template>
       <form v-if="location" @submit.prevent="update">
         <FormTextField v-model="updateData.name" :autofocus="true" label="Location Name" />
         <FormTextArea v-model="updateData.description" label="Location Description" />
-        <FormAutocomplete v-model="parent" :items="locations" item-text="name" item-value="id" label="Parent" />
+        <LocationSelector v-model="parent" />
         <div class="modal-action">
           <BaseButton type="submit" :loading="updating"> Update </BaseButton>
         </div>
       </form>
     </BaseModal>
-    <BaseContainer class="space-y-10 mb-16">
-      <BaseCard>
-        <template #title>
-          <BaseSectionHeader>
-            <Icon name="mdi-map-marker" class="mr-2 -mt-1 text-base-content" />
-            <span class="text-base-content">
-              {{ location ? location.name : "" }}
-            </span>
-            <div v-if="location && location.parent" class="text-sm breadcrumbs pb-0">
-              <ul class="text-base-content/70">
-                <li>
-                  <NuxtLink :to="`/location/${location.parent.id}`"> {{ location.parent.name }}</NuxtLink>
-                </li>
-                <li>{{ location.name }}</li>
-              </ul>
-            </div>
-          </BaseSectionHeader>
-        </template>
 
-        <template #title-actions>
-          <div class="flex mt-2 gap-2">
-            <div class="form-control max-w-[160px]">
-              <label class="label cursor-pointer">
-                <input v-model="preferences.showDetails" type="checkbox" class="toggle toggle-primary" />
-                <span class="label-text ml-2"> Detailed View </span>
-              </label>
+    <BaseContainer v-if="location">
+      <div class="bg-white rounded p-3">
+        <header class="mb-2">
+          <div class="flex flex-wrap items-end gap-2">
+            <div class="avatar placeholder mb-auto">
+              <div class="bg-neutral-focus text-neutral-content rounded-full w-12">
+                <Icon name="mdi-package-variant" class="h-7 w-7" />
+              </div>
             </div>
-            <BaseButton class="ml-auto" size="sm" @click="openUpdate">
-              <Icon class="mr-1" name="mdi-pencil" />
-              Edit
-            </BaseButton>
-            <BaseButton size="sm" @click="confirmDelete">
-              <Icon class="mr-1" name="mdi-delete" />
-              Delete
-            </BaseButton>
+            <div>
+              <div v-if="location?.parent" class="text-sm breadcrumbs pt-0 pb-0">
+                <ul class="text-base-content/70">
+                  <li>
+                    <NuxtLink :to="`/location/${location.parent.id}`"> {{ location.parent.name }}</NuxtLink>
+                  </li>
+                  <li>{{ location.name }}</li>
+                </ul>
+              </div>
+              <h1 class="text-2xl pb-1">
+                {{ location ? location.name : "" }}
+              </h1>
+              <div class="flex gap-1 flex-wrap text-xs">
+                <div>
+                  Created
+                  <DateTime :date="location?.createdAt" />
+                </div>
+              </div>
+            </div>
+            <div class="ml-auto mt-2 flex flex-wrap items-center justify-between gap-3">
+              <div class="btn-group">
+                <PageQRCode class="dropdown-left" />
+                <BaseButton size="sm" @click="openUpdate">
+                  <Icon class="mr-1" name="mdi-pencil" />
+                  Edit
+                </BaseButton>
+              </div>
+              <BaseButton class="btn btn-sm" @click="confirmDelete()">
+                <Icon name="mdi-delete" class="mr-2" />
+                Delete
+              </BaseButton>
+            </div>
           </div>
-        </template>
-
-        <DetailsSection :details="details" />
-      </BaseCard>
-
-      <section v-if="location && location.items.length > 0">
-        <BaseSectionHeader class="mb-5"> Items </BaseSectionHeader>
-        <div class="grid gap-2 grid-cols-1 sm:grid-cols-2">
-          <ItemCard v-for="item in location.items" :key="item.id" :item="item" />
-        </div>
-      </section>
-
-      <section v-if="location && location.children.length > 0">
-        <BaseSectionHeader class="mb-5"> Child Locations </BaseSectionHeader>
-        <div class="grid gap-2 grid-cols-1 sm:grid-cols-3">
-          <LocationCard v-for="item in location.children" :key="item.id" :location="item" />
-        </div>
+        </header>
+        <div class="divider my-0 mb-1"></div>
+        <Markdown v-if="location && location.description" class="text-base" :source="location.description"> </Markdown>
+      </div>
+      <section v-if="location && items">
+        <ItemViewSelectable :items="items" />
       </section>
     </BaseContainer>
   </div>

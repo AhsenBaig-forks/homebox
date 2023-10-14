@@ -1,6 +1,4 @@
 <script setup lang="ts">
-  import type { CustomDetail, Detail } from "~~/components/global/DetailsSection/types";
-
   definePageMeta({
     middleware: ["auth"],
   });
@@ -8,8 +6,6 @@
   const route = useRoute();
   const api = useUserApi();
   const toast = useNotifier();
-
-  const preferences = useViewPreferences();
 
   const labelId = computed<string>(() => route.params.id as string);
 
@@ -21,41 +17,6 @@
       return;
     }
     return data;
-  });
-
-  const details = computed<(Detail | CustomDetail)[]>(() => {
-    const details = [
-      {
-        name: "Name",
-        text: label.value?.name,
-      },
-      {
-        name: "Description",
-        text: label.value?.description,
-      },
-    ];
-
-    if (preferences.value.showDetails) {
-      return [
-        ...details,
-        {
-          name: "Created",
-          text: label.value?.createdAt,
-          type: "date",
-        },
-        {
-          name: "Updated",
-          text: label.value?.updatedAt,
-          type: "date",
-        },
-        {
-          name: "Database ID",
-          text: label.value?.id,
-        },
-      ];
-    }
-
-    return details;
   });
 
   const confirm = useConfirm();
@@ -98,6 +59,7 @@
     const { error, data } = await api.labels.update(labelId.value, updateData);
 
     if (error) {
+      updating.value = false;
       toast.error("Failed to update label");
       return;
     }
@@ -107,6 +69,23 @@
     updateModal.value = false;
     updating.value = false;
   }
+
+  const items = computedAsync(async () => {
+    if (!label.value) {
+      return [];
+    }
+
+    const resp = await api.items.getAll({
+      labels: [label.value.id],
+    });
+
+    if (resp.error) {
+      toast.error("Failed to load items");
+      return [];
+    }
+
+    return resp.data.items;
+  });
 </script>
 
 <template>
@@ -122,43 +101,47 @@
       </form>
     </BaseModal>
 
-    <BaseCard class="mb-16">
-      <template #title>
-        <BaseSectionHeader>
-          <Icon name="mdi-tag" class="mr-2 -mt-1 text-base-content" />
-          <span class="text-base-content">
-            {{ label ? label.name : "" }}
-          </span>
-        </BaseSectionHeader>
-      </template>
-
-      <template #title-actions>
-        <div class="flex mt-2 gap-2">
-          <div class="form-control max-w-[160px]">
-            <label class="label cursor-pointer">
-              <input v-model="preferences.showDetails" type="checkbox" class="toggle toggle-primary" />
-              <span class="label-text ml-2"> Detailed View </span>
-            </label>
+    <BaseContainer v-if="label">
+      <div class="bg-white rounded p-3">
+        <header class="mb-2">
+          <div class="flex flex-wrap items-end gap-2">
+            <div class="avatar placeholder mb-auto">
+              <div class="bg-neutral-focus text-neutral-content rounded-full w-12">
+                <Icon name="mdi-package-variant" class="h-7 w-7" />
+              </div>
+            </div>
+            <div>
+              <h1 class="text-2xl pb-1">
+                {{ label ? label.name : "" }}
+              </h1>
+              <div class="flex gap-1 flex-wrap text-xs">
+                <div>
+                  Created
+                  <DateTime :date="label?.createdAt" />
+                </div>
+              </div>
+            </div>
+            <div class="ml-auto mt-2 flex flex-wrap items-center justify-between gap-3">
+              <div class="btn-group">
+                <PageQRCode class="dropdown-left" />
+                <BaseButton size="sm" @click="openUpdate">
+                  <Icon class="mr-1" name="mdi-pencil" />
+                  Edit
+                </BaseButton>
+              </div>
+              <BaseButton class="btn btn-sm" @click="confirmDelete()">
+                <Icon name="mdi-delete" class="mr-2" />
+                Delete
+              </BaseButton>
+            </div>
           </div>
-          <BaseButton class="ml-auto" size="sm" @click="openUpdate">
-            <Icon class="mr-1" name="mdi-pencil" />
-            Edit
-          </BaseButton>
-          <BaseButton size="sm" @click="confirmDelete">
-            <Icon class="mr-1" name="mdi-delete" />
-            Delete
-          </BaseButton>
-        </div>
-      </template>
-
-      <DetailsSection :details="details" />
-    </BaseCard>
-
-    <section v-if="label">
-      <BaseSectionHeader class="mb-5"> Items </BaseSectionHeader>
-      <div class="grid gap-2 grid-cols-1 sm:grid-cols-2">
-        <ItemCard v-for="item in label.items" :key="item.id" :item="item" />
+        </header>
+        <div class="divider my-0 mb-1"></div>
+        <Markdown v-if="label && label.description" class="text-base" :source="label.description"> </Markdown>
       </div>
-    </section>
+      <section v-if="label && items">
+        <ItemViewSelectable :items="items" />
+      </section>
+    </BaseContainer>
   </BaseContainer>
 </template>

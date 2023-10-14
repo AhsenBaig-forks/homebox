@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -11,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/hay-kot/homebox/backend/internal/data/ent/authroles"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/authtokens"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/predicate"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/user"
@@ -19,13 +21,12 @@ import (
 // AuthTokensQuery is the builder for querying AuthTokens entities.
 type AuthTokensQuery struct {
 	config
-	limit      *int
-	offset     *int
-	unique     *bool
-	order      []OrderFunc
-	fields     []string
+	ctx        *QueryContext
+	order      []authtokens.OrderOption
+	inters     []Interceptor
 	predicates []predicate.AuthTokens
 	withUser   *UserQuery
+	withRoles  *AuthRolesQuery
 	withFKs    bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -38,34 +39,34 @@ func (atq *AuthTokensQuery) Where(ps ...predicate.AuthTokens) *AuthTokensQuery {
 	return atq
 }
 
-// Limit adds a limit step to the query.
+// Limit the number of records to be returned by this query.
 func (atq *AuthTokensQuery) Limit(limit int) *AuthTokensQuery {
-	atq.limit = &limit
+	atq.ctx.Limit = &limit
 	return atq
 }
 
-// Offset adds an offset step to the query.
+// Offset to start from.
 func (atq *AuthTokensQuery) Offset(offset int) *AuthTokensQuery {
-	atq.offset = &offset
+	atq.ctx.Offset = &offset
 	return atq
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
 func (atq *AuthTokensQuery) Unique(unique bool) *AuthTokensQuery {
-	atq.unique = &unique
+	atq.ctx.Unique = &unique
 	return atq
 }
 
-// Order adds an order step to the query.
-func (atq *AuthTokensQuery) Order(o ...OrderFunc) *AuthTokensQuery {
+// Order specifies how the records should be ordered.
+func (atq *AuthTokensQuery) Order(o ...authtokens.OrderOption) *AuthTokensQuery {
 	atq.order = append(atq.order, o...)
 	return atq
 }
 
 // QueryUser chains the current query on the "user" edge.
 func (atq *AuthTokensQuery) QueryUser() *UserQuery {
-	query := &UserQuery{config: atq.config}
+	query := (&UserClient{config: atq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := atq.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -85,10 +86,32 @@ func (atq *AuthTokensQuery) QueryUser() *UserQuery {
 	return query
 }
 
+// QueryRoles chains the current query on the "roles" edge.
+func (atq *AuthTokensQuery) QueryRoles() *AuthRolesQuery {
+	query := (&AuthRolesClient{config: atq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := atq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := atq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(authtokens.Table, authtokens.FieldID, selector),
+			sqlgraph.To(authroles.Table, authroles.FieldID),
+			sqlgraph.Edge(sqlgraph.O2O, false, authtokens.RolesTable, authtokens.RolesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(atq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // First returns the first AuthTokens entity from the query.
 // Returns a *NotFoundError when no AuthTokens was found.
 func (atq *AuthTokensQuery) First(ctx context.Context) (*AuthTokens, error) {
-	nodes, err := atq.Limit(1).All(ctx)
+	nodes, err := atq.Limit(1).All(setContextOp(ctx, atq.ctx, "First"))
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +134,7 @@ func (atq *AuthTokensQuery) FirstX(ctx context.Context) *AuthTokens {
 // Returns a *NotFoundError when no AuthTokens ID was found.
 func (atq *AuthTokensQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
 	var ids []uuid.UUID
-	if ids, err = atq.Limit(1).IDs(ctx); err != nil {
+	if ids, err = atq.Limit(1).IDs(setContextOp(ctx, atq.ctx, "FirstID")); err != nil {
 		return
 	}
 	if len(ids) == 0 {
@@ -134,7 +157,7 @@ func (atq *AuthTokensQuery) FirstIDX(ctx context.Context) uuid.UUID {
 // Returns a *NotSingularError when more than one AuthTokens entity is found.
 // Returns a *NotFoundError when no AuthTokens entities are found.
 func (atq *AuthTokensQuery) Only(ctx context.Context) (*AuthTokens, error) {
-	nodes, err := atq.Limit(2).All(ctx)
+	nodes, err := atq.Limit(2).All(setContextOp(ctx, atq.ctx, "Only"))
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +185,7 @@ func (atq *AuthTokensQuery) OnlyX(ctx context.Context) *AuthTokens {
 // Returns a *NotFoundError when no entities are found.
 func (atq *AuthTokensQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
 	var ids []uuid.UUID
-	if ids, err = atq.Limit(2).IDs(ctx); err != nil {
+	if ids, err = atq.Limit(2).IDs(setContextOp(ctx, atq.ctx, "OnlyID")); err != nil {
 		return
 	}
 	switch len(ids) {
@@ -187,10 +210,12 @@ func (atq *AuthTokensQuery) OnlyIDX(ctx context.Context) uuid.UUID {
 
 // All executes the query and returns a list of AuthTokensSlice.
 func (atq *AuthTokensQuery) All(ctx context.Context) ([]*AuthTokens, error) {
+	ctx = setContextOp(ctx, atq.ctx, "All")
 	if err := atq.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	return atq.sqlAll(ctx)
+	qr := querierAll[[]*AuthTokens, *AuthTokensQuery]()
+	return withInterceptors[[]*AuthTokens](ctx, atq, qr, atq.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
@@ -203,9 +228,12 @@ func (atq *AuthTokensQuery) AllX(ctx context.Context) []*AuthTokens {
 }
 
 // IDs executes the query and returns a list of AuthTokens IDs.
-func (atq *AuthTokensQuery) IDs(ctx context.Context) ([]uuid.UUID, error) {
-	var ids []uuid.UUID
-	if err := atq.Select(authtokens.FieldID).Scan(ctx, &ids); err != nil {
+func (atq *AuthTokensQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+	if atq.ctx.Unique == nil && atq.path != nil {
+		atq.Unique(true)
+	}
+	ctx = setContextOp(ctx, atq.ctx, "IDs")
+	if err = atq.Select(authtokens.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
@@ -222,10 +250,11 @@ func (atq *AuthTokensQuery) IDsX(ctx context.Context) []uuid.UUID {
 
 // Count returns the count of the given query.
 func (atq *AuthTokensQuery) Count(ctx context.Context) (int, error) {
+	ctx = setContextOp(ctx, atq.ctx, "Count")
 	if err := atq.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return atq.sqlCount(ctx)
+	return withInterceptors[int](ctx, atq, querierCount[*AuthTokensQuery](), atq.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
@@ -239,10 +268,15 @@ func (atq *AuthTokensQuery) CountX(ctx context.Context) int {
 
 // Exist returns true if the query has elements in the graph.
 func (atq *AuthTokensQuery) Exist(ctx context.Context) (bool, error) {
-	if err := atq.prepareQuery(ctx); err != nil {
-		return false, err
+	ctx = setContextOp(ctx, atq.ctx, "Exist")
+	switch _, err := atq.FirstID(ctx); {
+	case IsNotFound(err):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("ent: check existence: %w", err)
+	default:
+		return true, nil
 	}
-	return atq.sqlExist(ctx)
 }
 
 // ExistX is like Exist, but panics if an error occurs.
@@ -262,26 +296,37 @@ func (atq *AuthTokensQuery) Clone() *AuthTokensQuery {
 	}
 	return &AuthTokensQuery{
 		config:     atq.config,
-		limit:      atq.limit,
-		offset:     atq.offset,
-		order:      append([]OrderFunc{}, atq.order...),
+		ctx:        atq.ctx.Clone(),
+		order:      append([]authtokens.OrderOption{}, atq.order...),
+		inters:     append([]Interceptor{}, atq.inters...),
 		predicates: append([]predicate.AuthTokens{}, atq.predicates...),
 		withUser:   atq.withUser.Clone(),
+		withRoles:  atq.withRoles.Clone(),
 		// clone intermediate query.
-		sql:    atq.sql.Clone(),
-		path:   atq.path,
-		unique: atq.unique,
+		sql:  atq.sql.Clone(),
+		path: atq.path,
 	}
 }
 
 // WithUser tells the query-builder to eager-load the nodes that are connected to
 // the "user" edge. The optional arguments are used to configure the query builder of the edge.
 func (atq *AuthTokensQuery) WithUser(opts ...func(*UserQuery)) *AuthTokensQuery {
-	query := &UserQuery{config: atq.config}
+	query := (&UserClient{config: atq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
 	atq.withUser = query
+	return atq
+}
+
+// WithRoles tells the query-builder to eager-load the nodes that are connected to
+// the "roles" edge. The optional arguments are used to configure the query builder of the edge.
+func (atq *AuthTokensQuery) WithRoles(opts ...func(*AuthRolesQuery)) *AuthTokensQuery {
+	query := (&AuthRolesClient{config: atq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	atq.withRoles = query
 	return atq
 }
 
@@ -300,16 +345,11 @@ func (atq *AuthTokensQuery) WithUser(opts ...func(*UserQuery)) *AuthTokensQuery 
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (atq *AuthTokensQuery) GroupBy(field string, fields ...string) *AuthTokensGroupBy {
-	grbuild := &AuthTokensGroupBy{config: atq.config}
-	grbuild.fields = append([]string{field}, fields...)
-	grbuild.path = func(ctx context.Context) (prev *sql.Selector, err error) {
-		if err := atq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		return atq.sqlQuery(ctx), nil
-	}
+	atq.ctx.Fields = append([]string{field}, fields...)
+	grbuild := &AuthTokensGroupBy{build: atq}
+	grbuild.flds = &atq.ctx.Fields
 	grbuild.label = authtokens.Label
-	grbuild.flds, grbuild.scan = &grbuild.fields, grbuild.Scan
+	grbuild.scan = grbuild.Scan
 	return grbuild
 }
 
@@ -326,15 +366,30 @@ func (atq *AuthTokensQuery) GroupBy(field string, fields ...string) *AuthTokensG
 //		Select(authtokens.FieldCreatedAt).
 //		Scan(ctx, &v)
 func (atq *AuthTokensQuery) Select(fields ...string) *AuthTokensSelect {
-	atq.fields = append(atq.fields, fields...)
-	selbuild := &AuthTokensSelect{AuthTokensQuery: atq}
-	selbuild.label = authtokens.Label
-	selbuild.flds, selbuild.scan = &atq.fields, selbuild.Scan
-	return selbuild
+	atq.ctx.Fields = append(atq.ctx.Fields, fields...)
+	sbuild := &AuthTokensSelect{AuthTokensQuery: atq}
+	sbuild.label = authtokens.Label
+	sbuild.flds, sbuild.scan = &atq.ctx.Fields, sbuild.Scan
+	return sbuild
+}
+
+// Aggregate returns a AuthTokensSelect configured with the given aggregations.
+func (atq *AuthTokensQuery) Aggregate(fns ...AggregateFunc) *AuthTokensSelect {
+	return atq.Select().Aggregate(fns...)
 }
 
 func (atq *AuthTokensQuery) prepareQuery(ctx context.Context) error {
-	for _, f := range atq.fields {
+	for _, inter := range atq.inters {
+		if inter == nil {
+			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
+		}
+		if trv, ok := inter.(Traverser); ok {
+			if err := trv.Traverse(ctx, atq); err != nil {
+				return err
+			}
+		}
+	}
+	for _, f := range atq.ctx.Fields {
 		if !authtokens.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
@@ -354,8 +409,9 @@ func (atq *AuthTokensQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 		nodes       = []*AuthTokens{}
 		withFKs     = atq.withFKs
 		_spec       = atq.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [2]bool{
 			atq.withUser != nil,
+			atq.withRoles != nil,
 		}
 	)
 	if atq.withUser != nil {
@@ -388,6 +444,12 @@ func (atq *AuthTokensQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*
 			return nil, err
 		}
 	}
+	if query := atq.withRoles; query != nil {
+		if err := atq.loadRoles(ctx, query, nodes, nil,
+			func(n *AuthTokens, e *AuthRoles) { n.Edges.Roles = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
 }
 
@@ -403,6 +465,9 @@ func (atq *AuthTokensQuery) loadUser(ctx context.Context, query *UserQuery, node
 			ids = append(ids, fk)
 		}
 		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
 	}
 	query.Where(user.IDIn(ids...))
 	neighbors, err := query.All(ctx)
@@ -420,44 +485,53 @@ func (atq *AuthTokensQuery) loadUser(ctx context.Context, query *UserQuery, node
 	}
 	return nil
 }
+func (atq *AuthTokensQuery) loadRoles(ctx context.Context, query *AuthRolesQuery, nodes []*AuthTokens, init func(*AuthTokens), assign func(*AuthTokens, *AuthRoles)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[uuid.UUID]*AuthTokens)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+	}
+	query.withFKs = true
+	query.Where(predicate.AuthRoles(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(authtokens.RolesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.auth_tokens_roles
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "auth_tokens_roles" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "auth_tokens_roles" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
 
 func (atq *AuthTokensQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := atq.querySpec()
-	_spec.Node.Columns = atq.fields
-	if len(atq.fields) > 0 {
-		_spec.Unique = atq.unique != nil && *atq.unique
+	_spec.Node.Columns = atq.ctx.Fields
+	if len(atq.ctx.Fields) > 0 {
+		_spec.Unique = atq.ctx.Unique != nil && *atq.ctx.Unique
 	}
 	return sqlgraph.CountNodes(ctx, atq.driver, _spec)
 }
 
-func (atq *AuthTokensQuery) sqlExist(ctx context.Context) (bool, error) {
-	switch _, err := atq.FirstID(ctx); {
-	case IsNotFound(err):
-		return false, nil
-	case err != nil:
-		return false, fmt.Errorf("ent: check existence: %w", err)
-	default:
-		return true, nil
-	}
-}
-
 func (atq *AuthTokensQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := &sqlgraph.QuerySpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   authtokens.Table,
-			Columns: authtokens.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: authtokens.FieldID,
-			},
-		},
-		From:   atq.sql,
-		Unique: true,
-	}
-	if unique := atq.unique; unique != nil {
+	_spec := sqlgraph.NewQuerySpec(authtokens.Table, authtokens.Columns, sqlgraph.NewFieldSpec(authtokens.FieldID, field.TypeUUID))
+	_spec.From = atq.sql
+	if unique := atq.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
+	} else if atq.path != nil {
+		_spec.Unique = true
 	}
-	if fields := atq.fields; len(fields) > 0 {
+	if fields := atq.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
 		_spec.Node.Columns = append(_spec.Node.Columns, authtokens.FieldID)
 		for i := range fields {
@@ -473,10 +547,10 @@ func (atq *AuthTokensQuery) querySpec() *sqlgraph.QuerySpec {
 			}
 		}
 	}
-	if limit := atq.limit; limit != nil {
+	if limit := atq.ctx.Limit; limit != nil {
 		_spec.Limit = *limit
 	}
-	if offset := atq.offset; offset != nil {
+	if offset := atq.ctx.Offset; offset != nil {
 		_spec.Offset = *offset
 	}
 	if ps := atq.order; len(ps) > 0 {
@@ -492,7 +566,7 @@ func (atq *AuthTokensQuery) querySpec() *sqlgraph.QuerySpec {
 func (atq *AuthTokensQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(atq.driver.Dialect())
 	t1 := builder.Table(authtokens.Table)
-	columns := atq.fields
+	columns := atq.ctx.Fields
 	if len(columns) == 0 {
 		columns = authtokens.Columns
 	}
@@ -501,7 +575,7 @@ func (atq *AuthTokensQuery) sqlQuery(ctx context.Context) *sql.Selector {
 		selector = atq.sql
 		selector.Select(selector.Columns(columns...)...)
 	}
-	if atq.unique != nil && *atq.unique {
+	if atq.ctx.Unique != nil && *atq.ctx.Unique {
 		selector.Distinct()
 	}
 	for _, p := range atq.predicates {
@@ -510,12 +584,12 @@ func (atq *AuthTokensQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	for _, p := range atq.order {
 		p(selector)
 	}
-	if offset := atq.offset; offset != nil {
+	if offset := atq.ctx.Offset; offset != nil {
 		// limit is mandatory for offset clause. We start
 		// with default value, and override it below if needed.
 		selector.Offset(*offset).Limit(math.MaxInt32)
 	}
-	if limit := atq.limit; limit != nil {
+	if limit := atq.ctx.Limit; limit != nil {
 		selector.Limit(*limit)
 	}
 	return selector
@@ -523,13 +597,8 @@ func (atq *AuthTokensQuery) sqlQuery(ctx context.Context) *sql.Selector {
 
 // AuthTokensGroupBy is the group-by builder for AuthTokens entities.
 type AuthTokensGroupBy struct {
-	config
 	selector
-	fields []string
-	fns    []AggregateFunc
-	// intermediate query (i.e. traversal path).
-	sql  *sql.Selector
-	path func(context.Context) (*sql.Selector, error)
+	build *AuthTokensQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
@@ -538,74 +607,77 @@ func (atgb *AuthTokensGroupBy) Aggregate(fns ...AggregateFunc) *AuthTokensGroupB
 	return atgb
 }
 
-// Scan applies the group-by query and scans the result into the given value.
+// Scan applies the selector query and scans the result into the given value.
 func (atgb *AuthTokensGroupBy) Scan(ctx context.Context, v any) error {
-	query, err := atgb.path(ctx)
-	if err != nil {
+	ctx = setContextOp(ctx, atgb.build.ctx, "GroupBy")
+	if err := atgb.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	atgb.sql = query
-	return atgb.sqlScan(ctx, v)
+	return scanWithInterceptors[*AuthTokensQuery, *AuthTokensGroupBy](ctx, atgb.build, atgb, atgb.build.inters, v)
 }
 
-func (atgb *AuthTokensGroupBy) sqlScan(ctx context.Context, v any) error {
-	for _, f := range atgb.fields {
-		if !authtokens.ValidColumn(f) {
-			return &ValidationError{Name: f, err: fmt.Errorf("invalid field %q for group-by", f)}
-		}
+func (atgb *AuthTokensGroupBy) sqlScan(ctx context.Context, root *AuthTokensQuery, v any) error {
+	selector := root.sqlQuery(ctx).Select()
+	aggregation := make([]string, 0, len(atgb.fns))
+	for _, fn := range atgb.fns {
+		aggregation = append(aggregation, fn(selector))
 	}
-	selector := atgb.sqlQuery()
+	if len(selector.SelectedColumns()) == 0 {
+		columns := make([]string, 0, len(*atgb.flds)+len(atgb.fns))
+		for _, f := range *atgb.flds {
+			columns = append(columns, selector.C(f))
+		}
+		columns = append(columns, aggregation...)
+		selector.Select(columns...)
+	}
+	selector.GroupBy(selector.Columns(*atgb.flds...)...)
 	if err := selector.Err(); err != nil {
 		return err
 	}
 	rows := &sql.Rows{}
 	query, args := selector.Query()
-	if err := atgb.driver.Query(ctx, query, args, rows); err != nil {
+	if err := atgb.build.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
 }
 
-func (atgb *AuthTokensGroupBy) sqlQuery() *sql.Selector {
-	selector := atgb.sql.Select()
-	aggregation := make([]string, 0, len(atgb.fns))
-	for _, fn := range atgb.fns {
-		aggregation = append(aggregation, fn(selector))
-	}
-	// If no columns were selected in a custom aggregation function, the default
-	// selection is the fields used for "group-by", and the aggregation functions.
-	if len(selector.SelectedColumns()) == 0 {
-		columns := make([]string, 0, len(atgb.fields)+len(atgb.fns))
-		for _, f := range atgb.fields {
-			columns = append(columns, selector.C(f))
-		}
-		columns = append(columns, aggregation...)
-		selector.Select(columns...)
-	}
-	return selector.GroupBy(selector.Columns(atgb.fields...)...)
-}
-
 // AuthTokensSelect is the builder for selecting fields of AuthTokens entities.
 type AuthTokensSelect struct {
 	*AuthTokensQuery
 	selector
-	// intermediate query (i.e. traversal path).
-	sql *sql.Selector
+}
+
+// Aggregate adds the given aggregation functions to the selector query.
+func (ats *AuthTokensSelect) Aggregate(fns ...AggregateFunc) *AuthTokensSelect {
+	ats.fns = append(ats.fns, fns...)
+	return ats
 }
 
 // Scan applies the selector query and scans the result into the given value.
 func (ats *AuthTokensSelect) Scan(ctx context.Context, v any) error {
+	ctx = setContextOp(ctx, ats.ctx, "Select")
 	if err := ats.prepareQuery(ctx); err != nil {
 		return err
 	}
-	ats.sql = ats.AuthTokensQuery.sqlQuery(ctx)
-	return ats.sqlScan(ctx, v)
+	return scanWithInterceptors[*AuthTokensQuery, *AuthTokensSelect](ctx, ats.AuthTokensQuery, ats, ats.inters, v)
 }
 
-func (ats *AuthTokensSelect) sqlScan(ctx context.Context, v any) error {
+func (ats *AuthTokensSelect) sqlScan(ctx context.Context, root *AuthTokensQuery, v any) error {
+	selector := root.sqlQuery(ctx)
+	aggregation := make([]string, 0, len(ats.fns))
+	for _, fn := range ats.fns {
+		aggregation = append(aggregation, fn(selector))
+	}
+	switch n := len(*ats.selector.flds); {
+	case n == 0 && len(aggregation) > 0:
+		selector.Select(aggregation...)
+	case n != 0 && len(aggregation) > 0:
+		selector.AppendSelect(aggregation...)
+	}
 	rows := &sql.Rows{}
-	query, args := ats.sql.Query()
+	query, args := selector.Query()
 	if err := ats.driver.Query(ctx, query, args, rows); err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hay-kot/homebox/backend/internal/data/ent/authroles"
 	"github.com/hay-kot/homebox/backend/internal/data/repo"
 	"github.com/hay-kot/homebox/backend/pkgs/hasher"
 	"github.com/rs/zerolog/log"
@@ -30,8 +31,9 @@ type (
 		Password   string `json:"password"`
 	}
 	UserAuthTokenDetail struct {
-		Raw       string    `json:"raw"`
-		ExpiresAt time.Time `json:"expiresAt"`
+		Raw             string    `json:"raw"`
+		AttachmentToken string    `json:"attachmentToken"`
+		ExpiresAt       time.Time `json:"expiresAt"`
 	}
 	LoginForm struct {
 		Username string `json:"username"`
@@ -49,21 +51,25 @@ func (svc *UserService) RegisterUser(ctx context.Context, data UserRegistration)
 		Msg("Registering new user")
 
 	var (
-		err     error
-		group   repo.Group
-		token   repo.GroupInvitation
-		isOwner = false
+		err   error
+		group repo.Group
+		token repo.GroupInvitation
+
+		// creatingGroup is true if the user is creating a new group.
+		creatingGroup = false
 	)
 
 	switch data.GroupToken {
 	case "":
-		isOwner = true
+		log.Debug().Msg("creating new group")
+		creatingGroup = true
 		group, err = svc.repos.Groups.GroupCreate(ctx, "Home")
 		if err != nil {
 			log.Err(err).Msg("Failed to create group")
 			return repo.UserOut{}, err
 		}
 	default:
+		log.Debug().Msg("joining existing group")
 		token, err = svc.repos.Groups.InvitationGet(ctx, hasher.HashToken(data.GroupToken))
 		if err != nil {
 			log.Err(err).Msg("Failed to get invitation token")
@@ -79,7 +85,7 @@ func (svc *UserService) RegisterUser(ctx context.Context, data UserRegistration)
 		Password:    hashed,
 		IsSuperuser: false,
 		GroupID:     group.ID,
-		IsOwner:     isOwner,
+		IsOwner:     creatingGroup,
 	}
 
 	usr, err := svc.repos.Users.Create(ctx, usrCreate)
@@ -87,21 +93,24 @@ func (svc *UserService) RegisterUser(ctx context.Context, data UserRegistration)
 		return repo.UserOut{}, err
 	}
 
-	for _, label := range defaultLabels() {
-		_, err := svc.repos.Labels.Create(ctx, group.ID, label)
-		if err != nil {
-			return repo.UserOut{}, err
+	// Create the default labels and locations for the group.
+	if creatingGroup {
+		for _, label := range defaultLabels() {
+			_, err := svc.repos.Labels.Create(ctx, usr.GroupID, label)
+			if err != nil {
+				return repo.UserOut{}, err
+			}
+		}
+
+		for _, location := range defaultLocations() {
+			_, err := svc.repos.Locations.Create(ctx, usr.GroupID, location)
+			if err != nil {
+				return repo.UserOut{}, err
+			}
 		}
 	}
 
-	for _, location := range defaultLocations() {
-		_, err := svc.repos.Locations.Create(ctx, group.ID, location)
-		if err != nil {
-			return repo.UserOut{}, err
-		}
-	}
-
-	// Decrement the invitation token if it was used
+	// Decrement the invitation token if it was used.
 	if token.ID != uuid.Nil {
 		err = svc.repos.Groups.InvitationUpdate(ctx, token.ID, token.Uses-1)
 		if err != nil {
@@ -131,21 +140,46 @@ func (svc *UserService) UpdateSelf(ctx context.Context, ID uuid.UUID, data repo.
 // ============================================================================
 // User Authentication
 
-func (svc *UserService) createToken(ctx context.Context, userId uuid.UUID) (UserAuthTokenDetail, error) {
-	newToken := hasher.GenerateToken()
+func (svc *UserService) createSessionToken(ctx context.Context, userId uuid.UUID, extendedSession bool) (UserAuthTokenDetail, error) {
+	attachmentToken := hasher.GenerateToken()
 
-	created, err := svc.repos.AuthTokens.CreateToken(ctx, repo.UserAuthTokenCreate{
+	expiresAt := time.Now().Add(oneWeek)
+	if extendedSession {
+		expiresAt = time.Now().Add(oneWeek * 4)
+	}
+
+	attachmentData := repo.UserAuthTokenCreate{
 		UserID:    userId,
-		TokenHash: newToken.Hash,
-		ExpiresAt: time.Now().Add(oneWeek),
-	})
+		TokenHash: attachmentToken.Hash,
+		ExpiresAt: expiresAt,
+	}
 
-	return UserAuthTokenDetail{Raw: newToken.Raw, ExpiresAt: created.ExpiresAt}, err
+	_, err := svc.repos.AuthTokens.CreateToken(ctx, attachmentData, authroles.RoleAttachments)
+	if err != nil {
+		return UserAuthTokenDetail{}, err
+	}
+
+	userToken := hasher.GenerateToken()
+	data := repo.UserAuthTokenCreate{
+		UserID:    userId,
+		TokenHash: userToken.Hash,
+		ExpiresAt: expiresAt,
+	}
+
+	created, err := svc.repos.AuthTokens.CreateToken(ctx, data, authroles.RoleUser)
+	if err != nil {
+		return UserAuthTokenDetail{}, err
+	}
+
+	return UserAuthTokenDetail{
+		Raw:             userToken.Raw,
+		ExpiresAt:       created.ExpiresAt,
+		AttachmentToken: attachmentToken.Raw,
+	}, nil
 }
 
-func (svc *UserService) Login(ctx context.Context, username, password string) (UserAuthTokenDetail, error) {
+func (svc *UserService) Login(ctx context.Context, username, password string, extendedSession bool) (UserAuthTokenDetail, error) {
 	usr, err := svc.repos.Users.GetOneEmail(ctx, username)
-
 	if err != nil {
 		// SECURITY: Perform hash to ensure response times are the same
 		hasher.CheckPasswordHash("not-a-real-password", "not-a-real-password")
@@ -156,7 +190,7 @@ func (svc *UserService) Login(ctx context.Context, username, password string) (U
 		return UserAuthTokenDetail{}, ErrorInvalidLogin
 	}
 
-	return svc.createToken(ctx, usr.ID)
+	return svc.createSessionToken(ctx, usr.ID, extendedSession)
 }
 
 func (svc *UserService) Logout(ctx context.Context, token string) error {
@@ -169,14 +203,11 @@ func (svc *UserService) RenewToken(ctx context.Context, token string) (UserAuthT
 	hash := hasher.HashToken(token)
 
 	dbToken, err := svc.repos.AuthTokens.GetUserFromToken(ctx, hash)
-
 	if err != nil {
 		return UserAuthTokenDetail{}, ErrorInvalidToken
 	}
 
-	newToken, _ := svc.createToken(ctx, dbToken.ID)
-
-	return newToken, nil
+	return svc.createSessionToken(ctx, dbToken.ID, false)
 }
 
 // DeleteSelf deletes the user that is currently logged based of the provided UUID

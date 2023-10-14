@@ -109,35 +109,8 @@ func (gitu *GroupInvitationTokenUpdate) ClearGroup() *GroupInvitationTokenUpdate
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (gitu *GroupInvitationTokenUpdate) Save(ctx context.Context) (int, error) {
-	var (
-		err      error
-		affected int
-	)
 	gitu.defaults()
-	if len(gitu.hooks) == 0 {
-		affected, err = gitu.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*GroupInvitationTokenMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			gitu.mutation = mutation
-			affected, err = gitu.sqlSave(ctx)
-			mutation.done = true
-			return affected, err
-		})
-		for i := len(gitu.hooks) - 1; i >= 0; i-- {
-			if gitu.hooks[i] == nil {
-				return 0, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = gitu.hooks[i](mut)
-		}
-		if _, err := mut.Mutate(ctx, gitu.mutation); err != nil {
-			return 0, err
-		}
-	}
-	return affected, err
+	return withHooks(ctx, gitu.sqlSave, gitu.mutation, gitu.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -171,16 +144,7 @@ func (gitu *GroupInvitationTokenUpdate) defaults() {
 }
 
 func (gitu *GroupInvitationTokenUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   groupinvitationtoken.Table,
-			Columns: groupinvitationtoken.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: groupinvitationtoken.FieldID,
-			},
-		},
-	}
+	_spec := sqlgraph.NewUpdateSpec(groupinvitationtoken.Table, groupinvitationtoken.Columns, sqlgraph.NewFieldSpec(groupinvitationtoken.FieldID, field.TypeUUID))
 	if ps := gitu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -189,39 +153,19 @@ func (gitu *GroupInvitationTokenUpdate) sqlSave(ctx context.Context) (n int, err
 		}
 	}
 	if value, ok := gitu.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: groupinvitationtoken.FieldUpdatedAt,
-		})
+		_spec.SetField(groupinvitationtoken.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := gitu.mutation.Token(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBytes,
-			Value:  value,
-			Column: groupinvitationtoken.FieldToken,
-		})
+		_spec.SetField(groupinvitationtoken.FieldToken, field.TypeBytes, value)
 	}
 	if value, ok := gitu.mutation.ExpiresAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: groupinvitationtoken.FieldExpiresAt,
-		})
+		_spec.SetField(groupinvitationtoken.FieldExpiresAt, field.TypeTime, value)
 	}
 	if value, ok := gitu.mutation.Uses(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: groupinvitationtoken.FieldUses,
-		})
+		_spec.SetField(groupinvitationtoken.FieldUses, field.TypeInt, value)
 	}
 	if value, ok := gitu.mutation.AddedUses(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: groupinvitationtoken.FieldUses,
-		})
+		_spec.AddField(groupinvitationtoken.FieldUses, field.TypeInt, value)
 	}
 	if gitu.mutation.GroupCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -231,10 +175,7 @@ func (gitu *GroupInvitationTokenUpdate) sqlSave(ctx context.Context) (n int, err
 			Columns: []string{groupinvitationtoken.GroupColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -247,10 +188,7 @@ func (gitu *GroupInvitationTokenUpdate) sqlSave(ctx context.Context) (n int, err
 			Columns: []string{groupinvitationtoken.GroupColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -266,6 +204,7 @@ func (gitu *GroupInvitationTokenUpdate) sqlSave(ctx context.Context) (n int, err
 		}
 		return 0, err
 	}
+	gitu.mutation.done = true
 	return n, nil
 }
 
@@ -354,6 +293,12 @@ func (gituo *GroupInvitationTokenUpdateOne) ClearGroup() *GroupInvitationTokenUp
 	return gituo
 }
 
+// Where appends a list predicates to the GroupInvitationTokenUpdate builder.
+func (gituo *GroupInvitationTokenUpdateOne) Where(ps ...predicate.GroupInvitationToken) *GroupInvitationTokenUpdateOne {
+	gituo.mutation.Where(ps...)
+	return gituo
+}
+
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
 func (gituo *GroupInvitationTokenUpdateOne) Select(field string, fields ...string) *GroupInvitationTokenUpdateOne {
@@ -363,41 +308,8 @@ func (gituo *GroupInvitationTokenUpdateOne) Select(field string, fields ...strin
 
 // Save executes the query and returns the updated GroupInvitationToken entity.
 func (gituo *GroupInvitationTokenUpdateOne) Save(ctx context.Context) (*GroupInvitationToken, error) {
-	var (
-		err  error
-		node *GroupInvitationToken
-	)
 	gituo.defaults()
-	if len(gituo.hooks) == 0 {
-		node, err = gituo.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*GroupInvitationTokenMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			gituo.mutation = mutation
-			node, err = gituo.sqlSave(ctx)
-			mutation.done = true
-			return node, err
-		})
-		for i := len(gituo.hooks) - 1; i >= 0; i-- {
-			if gituo.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = gituo.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, gituo.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*GroupInvitationToken)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from GroupInvitationTokenMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, gituo.sqlSave, gituo.mutation, gituo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -431,16 +343,7 @@ func (gituo *GroupInvitationTokenUpdateOne) defaults() {
 }
 
 func (gituo *GroupInvitationTokenUpdateOne) sqlSave(ctx context.Context) (_node *GroupInvitationToken, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   groupinvitationtoken.Table,
-			Columns: groupinvitationtoken.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: groupinvitationtoken.FieldID,
-			},
-		},
-	}
+	_spec := sqlgraph.NewUpdateSpec(groupinvitationtoken.Table, groupinvitationtoken.Columns, sqlgraph.NewFieldSpec(groupinvitationtoken.FieldID, field.TypeUUID))
 	id, ok := gituo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "GroupInvitationToken.id" for update`)}
@@ -466,39 +369,19 @@ func (gituo *GroupInvitationTokenUpdateOne) sqlSave(ctx context.Context) (_node 
 		}
 	}
 	if value, ok := gituo.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: groupinvitationtoken.FieldUpdatedAt,
-		})
+		_spec.SetField(groupinvitationtoken.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := gituo.mutation.Token(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBytes,
-			Value:  value,
-			Column: groupinvitationtoken.FieldToken,
-		})
+		_spec.SetField(groupinvitationtoken.FieldToken, field.TypeBytes, value)
 	}
 	if value, ok := gituo.mutation.ExpiresAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: groupinvitationtoken.FieldExpiresAt,
-		})
+		_spec.SetField(groupinvitationtoken.FieldExpiresAt, field.TypeTime, value)
 	}
 	if value, ok := gituo.mutation.Uses(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: groupinvitationtoken.FieldUses,
-		})
+		_spec.SetField(groupinvitationtoken.FieldUses, field.TypeInt, value)
 	}
 	if value, ok := gituo.mutation.AddedUses(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: groupinvitationtoken.FieldUses,
-		})
+		_spec.AddField(groupinvitationtoken.FieldUses, field.TypeInt, value)
 	}
 	if gituo.mutation.GroupCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -508,10 +391,7 @@ func (gituo *GroupInvitationTokenUpdateOne) sqlSave(ctx context.Context) (_node 
 			Columns: []string{groupinvitationtoken.GroupColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -524,10 +404,7 @@ func (gituo *GroupInvitationTokenUpdateOne) sqlSave(ctx context.Context) (_node 
 			Columns: []string{groupinvitationtoken.GroupColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -546,5 +423,6 @@ func (gituo *GroupInvitationTokenUpdateOne) sqlSave(ctx context.Context) (_node 
 		}
 		return nil, err
 	}
+	gituo.mutation.done = true
 	return _node, nil
 }

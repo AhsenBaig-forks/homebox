@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/document"
@@ -30,19 +31,18 @@ type Document struct {
 	// The values are being populated by the DocumentQuery when eager-loading is set.
 	Edges           DocumentEdges `json:"edges"`
 	group_documents *uuid.UUID
+	selectValues    sql.SelectValues
 }
 
 // DocumentEdges holds the relations/edges for other nodes in the graph.
 type DocumentEdges struct {
 	// Group holds the value of the group edge.
 	Group *Group `json:"group,omitempty"`
-	// DocumentTokens holds the value of the document_tokens edge.
-	DocumentTokens []*DocumentToken `json:"document_tokens,omitempty"`
 	// Attachments holds the value of the attachments edge.
 	Attachments []*Attachment `json:"attachments,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [2]bool
 }
 
 // GroupOrErr returns the Group value or an error if the edge
@@ -58,19 +58,10 @@ func (e DocumentEdges) GroupOrErr() (*Group, error) {
 	return nil, &NotLoadedError{edge: "group"}
 }
 
-// DocumentTokensOrErr returns the DocumentTokens value or an error if the edge
-// was not loaded in eager-loading.
-func (e DocumentEdges) DocumentTokensOrErr() ([]*DocumentToken, error) {
-	if e.loadedTypes[1] {
-		return e.DocumentTokens, nil
-	}
-	return nil, &NotLoadedError{edge: "document_tokens"}
-}
-
 // AttachmentsOrErr returns the Attachments value or an error if the edge
 // was not loaded in eager-loading.
 func (e DocumentEdges) AttachmentsOrErr() ([]*Attachment, error) {
-	if e.loadedTypes[2] {
+	if e.loadedTypes[1] {
 		return e.Attachments, nil
 	}
 	return nil, &NotLoadedError{edge: "attachments"}
@@ -90,7 +81,7 @@ func (*Document) scanValues(columns []string) ([]any, error) {
 		case document.ForeignKeys[0]: // group_documents
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		default:
-			return nil, fmt.Errorf("unexpected column %q for type Document", columns[i])
+			values[i] = new(sql.UnknownType)
 		}
 	}
 	return values, nil
@@ -141,31 +132,34 @@ func (d *Document) assignValues(columns []string, values []any) error {
 				d.group_documents = new(uuid.UUID)
 				*d.group_documents = *value.S.(*uuid.UUID)
 			}
+		default:
+			d.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
 }
 
-// QueryGroup queries the "group" edge of the Document entity.
-func (d *Document) QueryGroup() *GroupQuery {
-	return (&DocumentClient{config: d.config}).QueryGroup(d)
+// Value returns the ent.Value that was dynamically selected and assigned to the Document.
+// This includes values selected through modifiers, order, etc.
+func (d *Document) Value(name string) (ent.Value, error) {
+	return d.selectValues.Get(name)
 }
 
-// QueryDocumentTokens queries the "document_tokens" edge of the Document entity.
-func (d *Document) QueryDocumentTokens() *DocumentTokenQuery {
-	return (&DocumentClient{config: d.config}).QueryDocumentTokens(d)
+// QueryGroup queries the "group" edge of the Document entity.
+func (d *Document) QueryGroup() *GroupQuery {
+	return NewDocumentClient(d.config).QueryGroup(d)
 }
 
 // QueryAttachments queries the "attachments" edge of the Document entity.
 func (d *Document) QueryAttachments() *AttachmentQuery {
-	return (&DocumentClient{config: d.config}).QueryAttachments(d)
+	return NewDocumentClient(d.config).QueryAttachments(d)
 }
 
 // Update returns a builder for updating this Document.
 // Note that you need to call Document.Unwrap() before calling this method if this Document
 // was returned from a transaction, and the transaction was committed or rolled back.
 func (d *Document) Update() *DocumentUpdateOne {
-	return (&DocumentClient{config: d.config}).UpdateOne(d)
+	return NewDocumentClient(d.config).UpdateOne(d)
 }
 
 // Unwrap unwraps the Document entity that was returned from a transaction after it was closed,
@@ -201,9 +195,3 @@ func (d *Document) String() string {
 
 // Documents is a parsable slice of Document.
 type Documents []*Document
-
-func (d Documents) config(cfg config) {
-	for _i := range d {
-		d[_i].config = cfg
-	}
-}

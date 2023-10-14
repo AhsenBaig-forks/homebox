@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/group"
@@ -27,7 +28,8 @@ type Group struct {
 	Currency group.Currency `json:"currency,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the GroupQuery when eager-loading is set.
-	Edges GroupEdges `json:"edges"`
+	Edges        GroupEdges `json:"edges"`
+	selectValues sql.SelectValues
 }
 
 // GroupEdges holds the relations/edges for other nodes in the graph.
@@ -44,9 +46,11 @@ type GroupEdges struct {
 	Documents []*Document `json:"documents,omitempty"`
 	// InvitationTokens holds the value of the invitation_tokens edge.
 	InvitationTokens []*GroupInvitationToken `json:"invitation_tokens,omitempty"`
+	// Notifiers holds the value of the notifiers edge.
+	Notifiers []*Notifier `json:"notifiers,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [6]bool
+	loadedTypes [7]bool
 }
 
 // UsersOrErr returns the Users value or an error if the edge
@@ -103,6 +107,15 @@ func (e GroupEdges) InvitationTokensOrErr() ([]*GroupInvitationToken, error) {
 	return nil, &NotLoadedError{edge: "invitation_tokens"}
 }
 
+// NotifiersOrErr returns the Notifiers value or an error if the edge
+// was not loaded in eager-loading.
+func (e GroupEdges) NotifiersOrErr() ([]*Notifier, error) {
+	if e.loadedTypes[6] {
+		return e.Notifiers, nil
+	}
+	return nil, &NotLoadedError{edge: "notifiers"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Group) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -115,7 +128,7 @@ func (*Group) scanValues(columns []string) ([]any, error) {
 		case group.FieldID:
 			values[i] = new(uuid.UUID)
 		default:
-			return nil, fmt.Errorf("unexpected column %q for type Group", columns[i])
+			values[i] = new(sql.UnknownType)
 		}
 	}
 	return values, nil
@@ -159,46 +172,59 @@ func (gr *Group) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				gr.Currency = group.Currency(value.String)
 			}
+		default:
+			gr.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
 }
 
+// Value returns the ent.Value that was dynamically selected and assigned to the Group.
+// This includes values selected through modifiers, order, etc.
+func (gr *Group) Value(name string) (ent.Value, error) {
+	return gr.selectValues.Get(name)
+}
+
 // QueryUsers queries the "users" edge of the Group entity.
 func (gr *Group) QueryUsers() *UserQuery {
-	return (&GroupClient{config: gr.config}).QueryUsers(gr)
+	return NewGroupClient(gr.config).QueryUsers(gr)
 }
 
 // QueryLocations queries the "locations" edge of the Group entity.
 func (gr *Group) QueryLocations() *LocationQuery {
-	return (&GroupClient{config: gr.config}).QueryLocations(gr)
+	return NewGroupClient(gr.config).QueryLocations(gr)
 }
 
 // QueryItems queries the "items" edge of the Group entity.
 func (gr *Group) QueryItems() *ItemQuery {
-	return (&GroupClient{config: gr.config}).QueryItems(gr)
+	return NewGroupClient(gr.config).QueryItems(gr)
 }
 
 // QueryLabels queries the "labels" edge of the Group entity.
 func (gr *Group) QueryLabels() *LabelQuery {
-	return (&GroupClient{config: gr.config}).QueryLabels(gr)
+	return NewGroupClient(gr.config).QueryLabels(gr)
 }
 
 // QueryDocuments queries the "documents" edge of the Group entity.
 func (gr *Group) QueryDocuments() *DocumentQuery {
-	return (&GroupClient{config: gr.config}).QueryDocuments(gr)
+	return NewGroupClient(gr.config).QueryDocuments(gr)
 }
 
 // QueryInvitationTokens queries the "invitation_tokens" edge of the Group entity.
 func (gr *Group) QueryInvitationTokens() *GroupInvitationTokenQuery {
-	return (&GroupClient{config: gr.config}).QueryInvitationTokens(gr)
+	return NewGroupClient(gr.config).QueryInvitationTokens(gr)
+}
+
+// QueryNotifiers queries the "notifiers" edge of the Group entity.
+func (gr *Group) QueryNotifiers() *NotifierQuery {
+	return NewGroupClient(gr.config).QueryNotifiers(gr)
 }
 
 // Update returns a builder for updating this Group.
 // Note that you need to call Group.Unwrap() before calling this method if this Group
 // was returned from a transaction, and the transaction was committed or rolled back.
 func (gr *Group) Update() *GroupUpdateOne {
-	return (&GroupClient{config: gr.config}).UpdateOne(gr)
+	return NewGroupClient(gr.config).UpdateOne(gr)
 }
 
 // Unwrap unwraps the Group entity that was returned from a transaction after it was closed,
@@ -234,9 +260,3 @@ func (gr *Group) String() string {
 
 // Groups is a parsable slice of Group.
 type Groups []*Group
-
-func (gr Groups) config(cfg config) {
-	for _i := range gr {
-		gr[_i].config = cfg
-	}
-}

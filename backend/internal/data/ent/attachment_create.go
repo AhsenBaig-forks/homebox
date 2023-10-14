@@ -65,6 +65,20 @@ func (ac *AttachmentCreate) SetNillableType(a *attachment.Type) *AttachmentCreat
 	return ac
 }
 
+// SetPrimary sets the "primary" field.
+func (ac *AttachmentCreate) SetPrimary(b bool) *AttachmentCreate {
+	ac.mutation.SetPrimary(b)
+	return ac
+}
+
+// SetNillablePrimary sets the "primary" field if the given value is not nil.
+func (ac *AttachmentCreate) SetNillablePrimary(b *bool) *AttachmentCreate {
+	if b != nil {
+		ac.SetPrimary(*b)
+	}
+	return ac
+}
+
 // SetID sets the "id" field.
 func (ac *AttachmentCreate) SetID(u uuid.UUID) *AttachmentCreate {
 	ac.mutation.SetID(u)
@@ -108,50 +122,8 @@ func (ac *AttachmentCreate) Mutation() *AttachmentMutation {
 
 // Save creates the Attachment in the database.
 func (ac *AttachmentCreate) Save(ctx context.Context) (*Attachment, error) {
-	var (
-		err  error
-		node *Attachment
-	)
 	ac.defaults()
-	if len(ac.hooks) == 0 {
-		if err = ac.check(); err != nil {
-			return nil, err
-		}
-		node, err = ac.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*AttachmentMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = ac.check(); err != nil {
-				return nil, err
-			}
-			ac.mutation = mutation
-			if node, err = ac.sqlSave(ctx); err != nil {
-				return nil, err
-			}
-			mutation.id = &node.ID
-			mutation.done = true
-			return node, err
-		})
-		for i := len(ac.hooks) - 1; i >= 0; i-- {
-			if ac.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = ac.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, ac.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*Attachment)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from AttachmentMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, ac.sqlSave, ac.mutation, ac.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
@@ -190,6 +162,10 @@ func (ac *AttachmentCreate) defaults() {
 		v := attachment.DefaultType
 		ac.mutation.SetType(v)
 	}
+	if _, ok := ac.mutation.Primary(); !ok {
+		v := attachment.DefaultPrimary
+		ac.mutation.SetPrimary(v)
+	}
 	if _, ok := ac.mutation.ID(); !ok {
 		v := attachment.DefaultID()
 		ac.mutation.SetID(v)
@@ -212,6 +188,9 @@ func (ac *AttachmentCreate) check() error {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Attachment.type": %w`, err)}
 		}
 	}
+	if _, ok := ac.mutation.Primary(); !ok {
+		return &ValidationError{Name: "primary", err: errors.New(`ent: missing required field "Attachment.primary"`)}
+	}
 	if _, ok := ac.mutation.ItemID(); !ok {
 		return &ValidationError{Name: "item", err: errors.New(`ent: missing required edge "Attachment.item"`)}
 	}
@@ -222,6 +201,9 @@ func (ac *AttachmentCreate) check() error {
 }
 
 func (ac *AttachmentCreate) sqlSave(ctx context.Context) (*Attachment, error) {
+	if err := ac.check(); err != nil {
+		return nil, err
+	}
 	_node, _spec := ac.createSpec()
 	if err := sqlgraph.CreateNode(ctx, ac.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
@@ -236,47 +218,35 @@ func (ac *AttachmentCreate) sqlSave(ctx context.Context) (*Attachment, error) {
 			return nil, err
 		}
 	}
+	ac.mutation.id = &_node.ID
+	ac.mutation.done = true
 	return _node, nil
 }
 
 func (ac *AttachmentCreate) createSpec() (*Attachment, *sqlgraph.CreateSpec) {
 	var (
 		_node = &Attachment{config: ac.config}
-		_spec = &sqlgraph.CreateSpec{
-			Table: attachment.Table,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: attachment.FieldID,
-			},
-		}
+		_spec = sqlgraph.NewCreateSpec(attachment.Table, sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID))
 	)
 	if id, ok := ac.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = &id
 	}
 	if value, ok := ac.mutation.CreatedAt(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: attachment.FieldCreatedAt,
-		})
+		_spec.SetField(attachment.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
 	if value, ok := ac.mutation.UpdatedAt(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: attachment.FieldUpdatedAt,
-		})
+		_spec.SetField(attachment.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
 	if value, ok := ac.mutation.GetType(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeEnum,
-			Value:  value,
-			Column: attachment.FieldType,
-		})
+		_spec.SetField(attachment.FieldType, field.TypeEnum, value)
 		_node.Type = value
+	}
+	if value, ok := ac.mutation.Primary(); ok {
+		_spec.SetField(attachment.FieldPrimary, field.TypeBool, value)
+		_node.Primary = value
 	}
 	if nodes := ac.mutation.ItemIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -286,10 +256,7 @@ func (ac *AttachmentCreate) createSpec() (*Attachment, *sqlgraph.CreateSpec) {
 			Columns: []string{attachment.ItemColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -306,10 +273,7 @@ func (ac *AttachmentCreate) createSpec() (*Attachment, *sqlgraph.CreateSpec) {
 			Columns: []string{attachment.DocumentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: document.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(document.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -345,8 +309,8 @@ func (acb *AttachmentCreateBulk) Save(ctx context.Context) ([]*Attachment, error
 					return nil, err
 				}
 				builder.mutation = mutation
-				nodes[i], specs[i] = builder.createSpec()
 				var err error
+				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
 					_, err = mutators[i+1].Mutate(root, acb.builders[i+1].mutation)
 				} else {

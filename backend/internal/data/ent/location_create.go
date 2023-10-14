@@ -85,6 +85,17 @@ func (lc *LocationCreate) SetNillableID(u *uuid.UUID) *LocationCreate {
 	return lc
 }
 
+// SetGroupID sets the "group" edge to the Group entity by ID.
+func (lc *LocationCreate) SetGroupID(id uuid.UUID) *LocationCreate {
+	lc.mutation.SetGroupID(id)
+	return lc
+}
+
+// SetGroup sets the "group" edge to the Group entity.
+func (lc *LocationCreate) SetGroup(g *Group) *LocationCreate {
+	return lc.SetGroupID(g.ID)
+}
+
 // SetParentID sets the "parent" edge to the Location entity by ID.
 func (lc *LocationCreate) SetParentID(id uuid.UUID) *LocationCreate {
 	lc.mutation.SetParentID(id)
@@ -119,17 +130,6 @@ func (lc *LocationCreate) AddChildren(l ...*Location) *LocationCreate {
 	return lc.AddChildIDs(ids...)
 }
 
-// SetGroupID sets the "group" edge to the Group entity by ID.
-func (lc *LocationCreate) SetGroupID(id uuid.UUID) *LocationCreate {
-	lc.mutation.SetGroupID(id)
-	return lc
-}
-
-// SetGroup sets the "group" edge to the Group entity.
-func (lc *LocationCreate) SetGroup(g *Group) *LocationCreate {
-	return lc.SetGroupID(g.ID)
-}
-
 // AddItemIDs adds the "items" edge to the Item entity by IDs.
 func (lc *LocationCreate) AddItemIDs(ids ...uuid.UUID) *LocationCreate {
 	lc.mutation.AddItemIDs(ids...)
@@ -152,50 +152,8 @@ func (lc *LocationCreate) Mutation() *LocationMutation {
 
 // Save creates the Location in the database.
 func (lc *LocationCreate) Save(ctx context.Context) (*Location, error) {
-	var (
-		err  error
-		node *Location
-	)
 	lc.defaults()
-	if len(lc.hooks) == 0 {
-		if err = lc.check(); err != nil {
-			return nil, err
-		}
-		node, err = lc.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*LocationMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = lc.check(); err != nil {
-				return nil, err
-			}
-			lc.mutation = mutation
-			if node, err = lc.sqlSave(ctx); err != nil {
-				return nil, err
-			}
-			mutation.id = &node.ID
-			mutation.done = true
-			return node, err
-		})
-		for i := len(lc.hooks) - 1; i >= 0; i-- {
-			if lc.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = lc.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, lc.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*Location)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from LocationMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, lc.sqlSave, lc.mutation, lc.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
@@ -264,6 +222,9 @@ func (lc *LocationCreate) check() error {
 }
 
 func (lc *LocationCreate) sqlSave(ctx context.Context) (*Location, error) {
+	if err := lc.check(); err != nil {
+		return nil, err
+	}
 	_node, _spec := lc.createSpec()
 	if err := sqlgraph.CreateNode(ctx, lc.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
@@ -278,55 +239,52 @@ func (lc *LocationCreate) sqlSave(ctx context.Context) (*Location, error) {
 			return nil, err
 		}
 	}
+	lc.mutation.id = &_node.ID
+	lc.mutation.done = true
 	return _node, nil
 }
 
 func (lc *LocationCreate) createSpec() (*Location, *sqlgraph.CreateSpec) {
 	var (
 		_node = &Location{config: lc.config}
-		_spec = &sqlgraph.CreateSpec{
-			Table: location.Table,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: location.FieldID,
-			},
-		}
+		_spec = sqlgraph.NewCreateSpec(location.Table, sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID))
 	)
 	if id, ok := lc.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = &id
 	}
 	if value, ok := lc.mutation.CreatedAt(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: location.FieldCreatedAt,
-		})
+		_spec.SetField(location.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
 	if value, ok := lc.mutation.UpdatedAt(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: location.FieldUpdatedAt,
-		})
+		_spec.SetField(location.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
 	if value, ok := lc.mutation.Name(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: location.FieldName,
-		})
+		_spec.SetField(location.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
 	if value, ok := lc.mutation.Description(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: location.FieldDescription,
-		})
+		_spec.SetField(location.FieldDescription, field.TypeString, value)
 		_node.Description = value
+	}
+	if nodes := lc.mutation.GroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   location.GroupTable,
+			Columns: []string{location.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.group_locations = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := lc.mutation.ParentIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -336,10 +294,7 @@ func (lc *LocationCreate) createSpec() (*Location, *sqlgraph.CreateSpec) {
 			Columns: []string{location.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -356,35 +311,12 @@ func (lc *LocationCreate) createSpec() (*Location, *sqlgraph.CreateSpec) {
 			Columns: []string{location.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := lc.mutation.GroupIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   location.GroupTable,
-			Columns: []string{location.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.group_locations = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := lc.mutation.ItemsIDs(); len(nodes) > 0 {
@@ -395,10 +327,7 @@ func (lc *LocationCreate) createSpec() (*Location, *sqlgraph.CreateSpec) {
 			Columns: []string{location.ItemsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -433,8 +362,8 @@ func (lcb *LocationCreateBulk) Save(ctx context.Context) ([]*Location, error) {
 					return nil, err
 				}
 				builder.mutation = mutation
-				nodes[i], specs[i] = builder.createSpec()
 				var err error
+				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
 					_, err = mutators[i+1].Mutate(root, lcb.builders[i+1].mutation)
 				} else {

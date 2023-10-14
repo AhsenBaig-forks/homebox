@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/hay-kot/homebox/backend/internal/data/ent/authroles"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/authtokens"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/user"
 )
@@ -103,6 +104,25 @@ func (atc *AuthTokensCreate) SetUser(u *User) *AuthTokensCreate {
 	return atc.SetUserID(u.ID)
 }
 
+// SetRolesID sets the "roles" edge to the AuthRoles entity by ID.
+func (atc *AuthTokensCreate) SetRolesID(id int) *AuthTokensCreate {
+	atc.mutation.SetRolesID(id)
+	return atc
+}
+
+// SetNillableRolesID sets the "roles" edge to the AuthRoles entity by ID if the given value is not nil.
+func (atc *AuthTokensCreate) SetNillableRolesID(id *int) *AuthTokensCreate {
+	if id != nil {
+		atc = atc.SetRolesID(*id)
+	}
+	return atc
+}
+
+// SetRoles sets the "roles" edge to the AuthRoles entity.
+func (atc *AuthTokensCreate) SetRoles(a *AuthRoles) *AuthTokensCreate {
+	return atc.SetRolesID(a.ID)
+}
+
 // Mutation returns the AuthTokensMutation object of the builder.
 func (atc *AuthTokensCreate) Mutation() *AuthTokensMutation {
 	return atc.mutation
@@ -110,50 +130,8 @@ func (atc *AuthTokensCreate) Mutation() *AuthTokensMutation {
 
 // Save creates the AuthTokens in the database.
 func (atc *AuthTokensCreate) Save(ctx context.Context) (*AuthTokens, error) {
-	var (
-		err  error
-		node *AuthTokens
-	)
 	atc.defaults()
-	if len(atc.hooks) == 0 {
-		if err = atc.check(); err != nil {
-			return nil, err
-		}
-		node, err = atc.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*AuthTokensMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = atc.check(); err != nil {
-				return nil, err
-			}
-			atc.mutation = mutation
-			if node, err = atc.sqlSave(ctx); err != nil {
-				return nil, err
-			}
-			mutation.id = &node.ID
-			mutation.done = true
-			return node, err
-		})
-		for i := len(atc.hooks) - 1; i >= 0; i-- {
-			if atc.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = atc.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, atc.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*AuthTokens)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from AuthTokensMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, atc.sqlSave, atc.mutation, atc.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
@@ -216,6 +194,9 @@ func (atc *AuthTokensCreate) check() error {
 }
 
 func (atc *AuthTokensCreate) sqlSave(ctx context.Context) (*AuthTokens, error) {
+	if err := atc.check(); err != nil {
+		return nil, err
+	}
 	_node, _spec := atc.createSpec()
 	if err := sqlgraph.CreateNode(ctx, atc.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
@@ -230,54 +211,34 @@ func (atc *AuthTokensCreate) sqlSave(ctx context.Context) (*AuthTokens, error) {
 			return nil, err
 		}
 	}
+	atc.mutation.id = &_node.ID
+	atc.mutation.done = true
 	return _node, nil
 }
 
 func (atc *AuthTokensCreate) createSpec() (*AuthTokens, *sqlgraph.CreateSpec) {
 	var (
 		_node = &AuthTokens{config: atc.config}
-		_spec = &sqlgraph.CreateSpec{
-			Table: authtokens.Table,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: authtokens.FieldID,
-			},
-		}
+		_spec = sqlgraph.NewCreateSpec(authtokens.Table, sqlgraph.NewFieldSpec(authtokens.FieldID, field.TypeUUID))
 	)
 	if id, ok := atc.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = &id
 	}
 	if value, ok := atc.mutation.CreatedAt(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: authtokens.FieldCreatedAt,
-		})
+		_spec.SetField(authtokens.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
 	if value, ok := atc.mutation.UpdatedAt(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: authtokens.FieldUpdatedAt,
-		})
+		_spec.SetField(authtokens.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
 	if value, ok := atc.mutation.Token(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeBytes,
-			Value:  value,
-			Column: authtokens.FieldToken,
-		})
+		_spec.SetField(authtokens.FieldToken, field.TypeBytes, value)
 		_node.Token = value
 	}
 	if value, ok := atc.mutation.ExpiresAt(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: authtokens.FieldExpiresAt,
-		})
+		_spec.SetField(authtokens.FieldExpiresAt, field.TypeTime, value)
 		_node.ExpiresAt = value
 	}
 	if nodes := atc.mutation.UserIDs(); len(nodes) > 0 {
@@ -288,16 +249,29 @@ func (atc *AuthTokensCreate) createSpec() (*AuthTokens, *sqlgraph.CreateSpec) {
 			Columns: []string{authtokens.UserColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: user.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.user_auth_tokens = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := atc.mutation.RolesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   authtokens.RolesTable,
+			Columns: []string{authtokens.RolesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(authroles.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
@@ -327,8 +301,8 @@ func (atcb *AuthTokensCreateBulk) Save(ctx context.Context) ([]*AuthTokens, erro
 					return nil, err
 				}
 				builder.mutation = mutation
-				nodes[i], specs[i] = builder.createSpec()
 				var err error
+				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
 					_, err = mutators[i+1].Mutate(root, atcb.builders[i+1].mutation)
 				} else {

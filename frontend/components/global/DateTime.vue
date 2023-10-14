@@ -3,46 +3,25 @@
 </template>
 
 <script setup lang="ts">
-  enum DateTimeFormat {
-    RELATIVE = "relative",
-    LONG = "long",
-    SHORT = "short",
-  }
+  import { DateTimeFormat, DateTimeType } from "~~/composables/use-formatters";
 
-  const value = computed(() => {
-    if (!props.date) {
-      return "";
-    }
+  type Props = {
+    date?: Date | string;
+    format?: DateTimeFormat;
+    datetimeType?: DateTimeType;
+  };
 
-    const dt = typeof props.date === "string" ? new Date(props.date) : props.date;
-    if (!dt) {
-      return "";
-    }
-
-    if (!validDate(dt)) {
-      return "";
-    }
-
-    switch (props.format) {
-      case DateTimeFormat.RELATIVE:
-        return useTimeAgo(dt).value + useDateFormat(dt, " (MM-DD-YYYY)").value;
-      case DateTimeFormat.LONG:
-        return useDateFormat(dt, "MM-DD-YYYY (dddd)").value;
-      case DateTimeFormat.SHORT:
-        return useDateFormat(dt, "MM-DD-YYYY").value;
-      default:
-        return "";
-    }
+  const props = withDefaults(defineProps<Props>(), {
+    date: undefined,
+    format: "relative",
+    datetimeType: "date",
   });
 
-  const props = defineProps({
-    date: {
-      type: [Date, String],
-      required: true,
-    },
-    format: {
-      type: String as () => DateTimeFormat,
-      default: "relative",
-    },
+  const value = computed(() => {
+    if (!props.date || !validDate(props.date)) {
+      return "";
+    }
+
+    return fmtDate(props.date, props.format, props.datetimeType);
   });
 </script>

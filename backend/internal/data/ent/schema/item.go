@@ -18,6 +18,7 @@ func (Item) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		mixins.BaseMixin{},
 		mixins.DetailsMixin{},
+		GroupMixin{ref: "items"},
 	}
 }
 
@@ -29,6 +30,7 @@ func (Item) Indexes() []ent.Index {
 		index.Fields("model_number"),
 		index.Fields("serial_number"),
 		index.Fields("archived"),
+		index.Fields("asset_id"),
 	}
 }
 
@@ -37,8 +39,7 @@ func (Item) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("import_ref").
 			Optional().
-			MaxLen(100).
-			Immutable(),
+			MaxLen(100),
 		field.String("notes").
 			MaxLen(1000).
 			Optional(),
@@ -48,6 +49,8 @@ func (Item) Fields() []ent.Field {
 			Default(false),
 		field.Bool("archived").
 			Default(false),
+		field.Int("asset_id").
+			Default(0),
 
 		// ------------------------------------
 		// item identification
@@ -96,26 +99,24 @@ func (Item) Fields() []ent.Field {
 
 // Edges of the Item.
 func (Item) Edges() []ent.Edge {
+	owned := func(s string, t any) ent.Edge {
+		return edge.To(s, t).
+			Annotations(entsql.Annotation{
+				OnDelete: entsql.Cascade,
+			})
+	}
+
 	return []ent.Edge{
 		edge.To("children", Item.Type).
 			From("parent").
-			Unique(),
-		edge.From("group", Group.Type).
-			Ref("items").
-			Required().
 			Unique(),
 		edge.From("label", Label.Type).
 			Ref("items"),
 		edge.From("location", Location.Type).
 			Ref("items").
 			Unique(),
-		edge.To("fields", ItemField.Type).
-			Annotations(entsql.Annotation{
-				OnDelete: entsql.Cascade,
-			}),
-		edge.To("attachments", Attachment.Type).
-			Annotations(entsql.Annotation{
-				OnDelete: entsql.Cascade,
-			}),
+		owned("fields", ItemField.Type),
+		owned("maintenance_entries", MaintenanceEntry.Type),
+		owned("attachments", Attachment.Type),
 	}
 }

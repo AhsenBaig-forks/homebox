@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/attachment"
@@ -25,11 +26,14 @@ type Attachment struct {
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// Type holds the value of the "type" field.
 	Type attachment.Type `json:"type,omitempty"`
+	// Primary holds the value of the "primary" field.
+	Primary bool `json:"primary,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the AttachmentQuery when eager-loading is set.
 	Edges                AttachmentEdges `json:"edges"`
 	document_attachments *uuid.UUID
 	item_attachments     *uuid.UUID
+	selectValues         sql.SelectValues
 }
 
 // AttachmentEdges holds the relations/edges for other nodes in the graph.
@@ -74,6 +78,8 @@ func (*Attachment) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case attachment.FieldPrimary:
+			values[i] = new(sql.NullBool)
 		case attachment.FieldType:
 			values[i] = new(sql.NullString)
 		case attachment.FieldCreatedAt, attachment.FieldUpdatedAt:
@@ -85,7 +91,7 @@ func (*Attachment) scanValues(columns []string) ([]any, error) {
 		case attachment.ForeignKeys[1]: // item_attachments
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		default:
-			return nil, fmt.Errorf("unexpected column %q for type Attachment", columns[i])
+			values[i] = new(sql.UnknownType)
 		}
 	}
 	return values, nil
@@ -123,6 +129,12 @@ func (a *Attachment) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				a.Type = attachment.Type(value.String)
 			}
+		case attachment.FieldPrimary:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field primary", values[i])
+			} else if value.Valid {
+				a.Primary = value.Bool
+			}
 		case attachment.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field document_attachments", values[i])
@@ -137,26 +149,34 @@ func (a *Attachment) assignValues(columns []string, values []any) error {
 				a.item_attachments = new(uuid.UUID)
 				*a.item_attachments = *value.S.(*uuid.UUID)
 			}
+		default:
+			a.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
 }
 
+// Value returns the ent.Value that was dynamically selected and assigned to the Attachment.
+// This includes values selected through modifiers, order, etc.
+func (a *Attachment) Value(name string) (ent.Value, error) {
+	return a.selectValues.Get(name)
+}
+
 // QueryItem queries the "item" edge of the Attachment entity.
 func (a *Attachment) QueryItem() *ItemQuery {
-	return (&AttachmentClient{config: a.config}).QueryItem(a)
+	return NewAttachmentClient(a.config).QueryItem(a)
 }
 
 // QueryDocument queries the "document" edge of the Attachment entity.
 func (a *Attachment) QueryDocument() *DocumentQuery {
-	return (&AttachmentClient{config: a.config}).QueryDocument(a)
+	return NewAttachmentClient(a.config).QueryDocument(a)
 }
 
 // Update returns a builder for updating this Attachment.
 // Note that you need to call Attachment.Unwrap() before calling this method if this Attachment
 // was returned from a transaction, and the transaction was committed or rolled back.
 func (a *Attachment) Update() *AttachmentUpdateOne {
-	return (&AttachmentClient{config: a.config}).UpdateOne(a)
+	return NewAttachmentClient(a.config).UpdateOne(a)
 }
 
 // Unwrap unwraps the Attachment entity that was returned from a transaction after it was closed,
@@ -183,15 +203,12 @@ func (a *Attachment) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(fmt.Sprintf("%v", a.Type))
+	builder.WriteString(", ")
+	builder.WriteString("primary=")
+	builder.WriteString(fmt.Sprintf("%v", a.Primary))
 	builder.WriteByte(')')
 	return builder.String()
 }
 
 // Attachments is a parsable slice of Attachment.
 type Attachments []*Attachment
-
-func (a Attachments) config(cfg config) {
-	for _i := range a {
-		a[_i].config = cfg
-	}
-}

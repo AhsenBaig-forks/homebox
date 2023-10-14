@@ -14,6 +14,7 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "type", Type: field.TypeEnum, Enums: []string{"photo", "manual", "warranty", "attachment", "receipt"}, Default: "attachment"},
+		{Name: "primary", Type: field.TypeBool, Default: false},
 		{Name: "document_attachments", Type: field.TypeUUID},
 		{Name: "item_attachments", Type: field.TypeUUID},
 	}
@@ -25,14 +26,34 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "attachments_documents_attachments",
-				Columns:    []*schema.Column{AttachmentsColumns[4]},
+				Columns:    []*schema.Column{AttachmentsColumns[5]},
 				RefColumns: []*schema.Column{DocumentsColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "attachments_items_attachments",
-				Columns:    []*schema.Column{AttachmentsColumns[5]},
+				Columns:    []*schema.Column{AttachmentsColumns[6]},
 				RefColumns: []*schema.Column{ItemsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+	}
+	// AuthRolesColumns holds the columns for the "auth_roles" table.
+	AuthRolesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "role", Type: field.TypeEnum, Enums: []string{"admin", "user", "attachments"}, Default: "user"},
+		{Name: "auth_tokens_roles", Type: field.TypeUUID, Unique: true, Nullable: true},
+	}
+	// AuthRolesTable holds the schema information for the "auth_roles" table.
+	AuthRolesTable = &schema.Table{
+		Name:       "auth_roles",
+		Columns:    AuthRolesColumns,
+		PrimaryKey: []*schema.Column{AuthRolesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "auth_roles_auth_tokens_roles",
+				Columns:    []*schema.Column{AuthRolesColumns[2]},
+				RefColumns: []*schema.Column{AuthTokensColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
 		},
@@ -90,44 +111,13 @@ var (
 			},
 		},
 	}
-	// DocumentTokensColumns holds the columns for the "document_tokens" table.
-	DocumentTokensColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeUUID},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "token", Type: field.TypeBytes, Unique: true},
-		{Name: "uses", Type: field.TypeInt, Default: 1},
-		{Name: "expires_at", Type: field.TypeTime},
-		{Name: "document_document_tokens", Type: field.TypeUUID, Nullable: true},
-	}
-	// DocumentTokensTable holds the schema information for the "document_tokens" table.
-	DocumentTokensTable = &schema.Table{
-		Name:       "document_tokens",
-		Columns:    DocumentTokensColumns,
-		PrimaryKey: []*schema.Column{DocumentTokensColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "document_tokens_documents_document_tokens",
-				Columns:    []*schema.Column{DocumentTokensColumns[6]},
-				RefColumns: []*schema.Column{DocumentsColumns[0]},
-				OnDelete:   schema.Cascade,
-			},
-		},
-		Indexes: []*schema.Index{
-			{
-				Name:    "documenttoken_token",
-				Unique:  false,
-				Columns: []*schema.Column{DocumentTokensColumns[3]},
-			},
-		},
-	}
 	// GroupsColumns holds the columns for the "groups" table.
 	GroupsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "name", Type: field.TypeString, Size: 255},
-		{Name: "currency", Type: field.TypeEnum, Enums: []string{"usd", "eur", "gbp", "jpy", "zar", "aud", "nok", "sek", "dkk"}, Default: "usd"},
+		{Name: "currency", Type: field.TypeEnum, Enums: []string{"aed", "aud", "bgn", "brl", "cad", "chf", "czk", "dkk", "eur", "gbp", "hkd", "idr", "inr", "jpy", "krw", "mxn", "nok", "nzd", "pln", "rmb", "ron", "rub", "sar", "sek", "sgd", "thb", "try", "usd", "xag", "xau", "zar"}, Default: "usd"},
 	}
 	// GroupsTable holds the schema information for the "groups" table.
 	GroupsTable = &schema.Table{
@@ -171,6 +161,7 @@ var (
 		{Name: "quantity", Type: field.TypeInt, Default: 1},
 		{Name: "insured", Type: field.TypeBool, Default: false},
 		{Name: "archived", Type: field.TypeBool, Default: false},
+		{Name: "asset_id", Type: field.TypeInt, Default: 0},
 		{Name: "serial_number", Type: field.TypeString, Nullable: true, Size: 255},
 		{Name: "model_number", Type: field.TypeString, Nullable: true, Size: 255},
 		{Name: "manufacturer", Type: field.TypeString, Nullable: true, Size: 255},
@@ -196,19 +187,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "items_groups_items",
-				Columns:    []*schema.Column{ItemsColumns[23]},
+				Columns:    []*schema.Column{ItemsColumns[24]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
 			{
 				Symbol:     "items_items_children",
-				Columns:    []*schema.Column{ItemsColumns[24]},
+				Columns:    []*schema.Column{ItemsColumns[25]},
 				RefColumns: []*schema.Column{ItemsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "items_locations_items",
-				Columns:    []*schema.Column{ItemsColumns[25]},
+				Columns:    []*schema.Column{ItemsColumns[26]},
 				RefColumns: []*schema.Column{LocationsColumns[0]},
 				OnDelete:   schema.Cascade,
 			},
@@ -222,22 +213,27 @@ var (
 			{
 				Name:    "item_manufacturer",
 				Unique:  false,
-				Columns: []*schema.Column{ItemsColumns[12]},
+				Columns: []*schema.Column{ItemsColumns[13]},
 			},
 			{
 				Name:    "item_model_number",
 				Unique:  false,
-				Columns: []*schema.Column{ItemsColumns[11]},
+				Columns: []*schema.Column{ItemsColumns[12]},
 			},
 			{
 				Name:    "item_serial_number",
 				Unique:  false,
-				Columns: []*schema.Column{ItemsColumns[10]},
+				Columns: []*schema.Column{ItemsColumns[11]},
 			},
 			{
 				Name:    "item_archived",
 				Unique:  false,
 				Columns: []*schema.Column{ItemsColumns[9]},
+			},
+			{
+				Name:    "item_asset_id",
+				Unique:  false,
+				Columns: []*schema.Column{ItemsColumns[10]},
 			},
 		},
 	}
@@ -323,6 +319,85 @@ var (
 			},
 		},
 	}
+	// MaintenanceEntriesColumns holds the columns for the "maintenance_entries" table.
+	MaintenanceEntriesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "date", Type: field.TypeTime, Nullable: true},
+		{Name: "scheduled_date", Type: field.TypeTime, Nullable: true},
+		{Name: "name", Type: field.TypeString, Size: 255},
+		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2500},
+		{Name: "cost", Type: field.TypeFloat64, Default: 0},
+		{Name: "item_id", Type: field.TypeUUID},
+	}
+	// MaintenanceEntriesTable holds the schema information for the "maintenance_entries" table.
+	MaintenanceEntriesTable = &schema.Table{
+		Name:       "maintenance_entries",
+		Columns:    MaintenanceEntriesColumns,
+		PrimaryKey: []*schema.Column{MaintenanceEntriesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "maintenance_entries_items_maintenance_entries",
+				Columns:    []*schema.Column{MaintenanceEntriesColumns[8]},
+				RefColumns: []*schema.Column{ItemsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+	}
+	// NotifiersColumns holds the columns for the "notifiers" table.
+	NotifiersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "name", Type: field.TypeString, Size: 255},
+		{Name: "url", Type: field.TypeString, Size: 2083},
+		{Name: "is_active", Type: field.TypeBool, Default: true},
+		{Name: "group_id", Type: field.TypeUUID},
+		{Name: "user_id", Type: field.TypeUUID},
+	}
+	// NotifiersTable holds the schema information for the "notifiers" table.
+	NotifiersTable = &schema.Table{
+		Name:       "notifiers",
+		Columns:    NotifiersColumns,
+		PrimaryKey: []*schema.Column{NotifiersColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "notifiers_groups_notifiers",
+				Columns:    []*schema.Column{NotifiersColumns[6]},
+				RefColumns: []*schema.Column{GroupsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "notifiers_users_notifiers",
+				Columns:    []*schema.Column{NotifiersColumns[7]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "notifier_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{NotifiersColumns[7]},
+			},
+			{
+				Name:    "notifier_user_id_is_active",
+				Unique:  false,
+				Columns: []*schema.Column{NotifiersColumns[7], NotifiersColumns[5]},
+			},
+			{
+				Name:    "notifier_group_id",
+				Unique:  false,
+				Columns: []*schema.Column{NotifiersColumns[6]},
+			},
+			{
+				Name:    "notifier_group_id_is_active",
+				Unique:  false,
+				Columns: []*schema.Column{NotifiersColumns[6], NotifiersColumns[5]},
+			},
+		},
+	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -332,8 +407,8 @@ var (
 		{Name: "email", Type: field.TypeString, Unique: true, Size: 255},
 		{Name: "password", Type: field.TypeString, Size: 255},
 		{Name: "is_superuser", Type: field.TypeBool, Default: false},
-		{Name: "role", Type: field.TypeEnum, Enums: []string{"user", "owner"}, Default: "user"},
 		{Name: "superuser", Type: field.TypeBool, Default: false},
+		{Name: "role", Type: field.TypeEnum, Enums: []string{"user", "owner"}, Default: "user"},
 		{Name: "activated_on", Type: field.TypeTime, Nullable: true},
 		{Name: "group_users", Type: field.TypeUUID},
 	}
@@ -379,15 +454,17 @@ var (
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AttachmentsTable,
+		AuthRolesTable,
 		AuthTokensTable,
 		DocumentsTable,
-		DocumentTokensTable,
 		GroupsTable,
 		GroupInvitationTokensTable,
 		ItemsTable,
 		ItemFieldsTable,
 		LabelsTable,
 		LocationsTable,
+		MaintenanceEntriesTable,
+		NotifiersTable,
 		UsersTable,
 		LabelItemsTable,
 	}
@@ -396,9 +473,9 @@ var (
 func init() {
 	AttachmentsTable.ForeignKeys[0].RefTable = DocumentsTable
 	AttachmentsTable.ForeignKeys[1].RefTable = ItemsTable
+	AuthRolesTable.ForeignKeys[0].RefTable = AuthTokensTable
 	AuthTokensTable.ForeignKeys[0].RefTable = UsersTable
 	DocumentsTable.ForeignKeys[0].RefTable = GroupsTable
-	DocumentTokensTable.ForeignKeys[0].RefTable = DocumentsTable
 	GroupInvitationTokensTable.ForeignKeys[0].RefTable = GroupsTable
 	ItemsTable.ForeignKeys[0].RefTable = GroupsTable
 	ItemsTable.ForeignKeys[1].RefTable = ItemsTable
@@ -407,6 +484,9 @@ func init() {
 	LabelsTable.ForeignKeys[0].RefTable = GroupsTable
 	LocationsTable.ForeignKeys[0].RefTable = GroupsTable
 	LocationsTable.ForeignKeys[1].RefTable = LocationsTable
+	MaintenanceEntriesTable.ForeignKeys[0].RefTable = ItemsTable
+	NotifiersTable.ForeignKeys[0].RefTable = GroupsTable
+	NotifiersTable.ForeignKeys[1].RefTable = UsersTable
 	UsersTable.ForeignKeys[0].RefTable = GroupsTable
 	LabelItemsTable.ForeignKeys[0].RefTable = LabelsTable
 	LabelItemsTable.ForeignKeys[1].RefTable = ItemsTable

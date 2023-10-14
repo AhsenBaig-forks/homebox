@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/hay-kot/homebox/backend/internal/data/ent/authroles"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/authtokens"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/predicate"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/user"
@@ -75,6 +76,25 @@ func (atu *AuthTokensUpdate) SetUser(u *User) *AuthTokensUpdate {
 	return atu.SetUserID(u.ID)
 }
 
+// SetRolesID sets the "roles" edge to the AuthRoles entity by ID.
+func (atu *AuthTokensUpdate) SetRolesID(id int) *AuthTokensUpdate {
+	atu.mutation.SetRolesID(id)
+	return atu
+}
+
+// SetNillableRolesID sets the "roles" edge to the AuthRoles entity by ID if the given value is not nil.
+func (atu *AuthTokensUpdate) SetNillableRolesID(id *int) *AuthTokensUpdate {
+	if id != nil {
+		atu = atu.SetRolesID(*id)
+	}
+	return atu
+}
+
+// SetRoles sets the "roles" edge to the AuthRoles entity.
+func (atu *AuthTokensUpdate) SetRoles(a *AuthRoles) *AuthTokensUpdate {
+	return atu.SetRolesID(a.ID)
+}
+
 // Mutation returns the AuthTokensMutation object of the builder.
 func (atu *AuthTokensUpdate) Mutation() *AuthTokensMutation {
 	return atu.mutation
@@ -86,37 +106,16 @@ func (atu *AuthTokensUpdate) ClearUser() *AuthTokensUpdate {
 	return atu
 }
 
+// ClearRoles clears the "roles" edge to the AuthRoles entity.
+func (atu *AuthTokensUpdate) ClearRoles() *AuthTokensUpdate {
+	atu.mutation.ClearRoles()
+	return atu
+}
+
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (atu *AuthTokensUpdate) Save(ctx context.Context) (int, error) {
-	var (
-		err      error
-		affected int
-	)
 	atu.defaults()
-	if len(atu.hooks) == 0 {
-		affected, err = atu.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*AuthTokensMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			atu.mutation = mutation
-			affected, err = atu.sqlSave(ctx)
-			mutation.done = true
-			return affected, err
-		})
-		for i := len(atu.hooks) - 1; i >= 0; i-- {
-			if atu.hooks[i] == nil {
-				return 0, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = atu.hooks[i](mut)
-		}
-		if _, err := mut.Mutate(ctx, atu.mutation); err != nil {
-			return 0, err
-		}
-	}
-	return affected, err
+	return withHooks(ctx, atu.sqlSave, atu.mutation, atu.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -150,16 +149,7 @@ func (atu *AuthTokensUpdate) defaults() {
 }
 
 func (atu *AuthTokensUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   authtokens.Table,
-			Columns: authtokens.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: authtokens.FieldID,
-			},
-		},
-	}
+	_spec := sqlgraph.NewUpdateSpec(authtokens.Table, authtokens.Columns, sqlgraph.NewFieldSpec(authtokens.FieldID, field.TypeUUID))
 	if ps := atu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -168,25 +158,13 @@ func (atu *AuthTokensUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 	}
 	if value, ok := atu.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: authtokens.FieldUpdatedAt,
-		})
+		_spec.SetField(authtokens.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := atu.mutation.Token(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBytes,
-			Value:  value,
-			Column: authtokens.FieldToken,
-		})
+		_spec.SetField(authtokens.FieldToken, field.TypeBytes, value)
 	}
 	if value, ok := atu.mutation.ExpiresAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: authtokens.FieldExpiresAt,
-		})
+		_spec.SetField(authtokens.FieldExpiresAt, field.TypeTime, value)
 	}
 	if atu.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -196,10 +174,7 @@ func (atu *AuthTokensUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{authtokens.UserColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: user.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -212,10 +187,36 @@ func (atu *AuthTokensUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{authtokens.UserColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: user.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if atu.mutation.RolesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   authtokens.RolesTable,
+			Columns: []string{authtokens.RolesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(authroles.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := atu.mutation.RolesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   authtokens.RolesTable,
+			Columns: []string{authtokens.RolesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(authroles.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -231,6 +232,7 @@ func (atu *AuthTokensUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
+	atu.mutation.done = true
 	return n, nil
 }
 
@@ -287,6 +289,25 @@ func (atuo *AuthTokensUpdateOne) SetUser(u *User) *AuthTokensUpdateOne {
 	return atuo.SetUserID(u.ID)
 }
 
+// SetRolesID sets the "roles" edge to the AuthRoles entity by ID.
+func (atuo *AuthTokensUpdateOne) SetRolesID(id int) *AuthTokensUpdateOne {
+	atuo.mutation.SetRolesID(id)
+	return atuo
+}
+
+// SetNillableRolesID sets the "roles" edge to the AuthRoles entity by ID if the given value is not nil.
+func (atuo *AuthTokensUpdateOne) SetNillableRolesID(id *int) *AuthTokensUpdateOne {
+	if id != nil {
+		atuo = atuo.SetRolesID(*id)
+	}
+	return atuo
+}
+
+// SetRoles sets the "roles" edge to the AuthRoles entity.
+func (atuo *AuthTokensUpdateOne) SetRoles(a *AuthRoles) *AuthTokensUpdateOne {
+	return atuo.SetRolesID(a.ID)
+}
+
 // Mutation returns the AuthTokensMutation object of the builder.
 func (atuo *AuthTokensUpdateOne) Mutation() *AuthTokensMutation {
 	return atuo.mutation
@@ -295,6 +316,18 @@ func (atuo *AuthTokensUpdateOne) Mutation() *AuthTokensMutation {
 // ClearUser clears the "user" edge to the User entity.
 func (atuo *AuthTokensUpdateOne) ClearUser() *AuthTokensUpdateOne {
 	atuo.mutation.ClearUser()
+	return atuo
+}
+
+// ClearRoles clears the "roles" edge to the AuthRoles entity.
+func (atuo *AuthTokensUpdateOne) ClearRoles() *AuthTokensUpdateOne {
+	atuo.mutation.ClearRoles()
+	return atuo
+}
+
+// Where appends a list predicates to the AuthTokensUpdate builder.
+func (atuo *AuthTokensUpdateOne) Where(ps ...predicate.AuthTokens) *AuthTokensUpdateOne {
+	atuo.mutation.Where(ps...)
 	return atuo
 }
 
@@ -307,41 +340,8 @@ func (atuo *AuthTokensUpdateOne) Select(field string, fields ...string) *AuthTok
 
 // Save executes the query and returns the updated AuthTokens entity.
 func (atuo *AuthTokensUpdateOne) Save(ctx context.Context) (*AuthTokens, error) {
-	var (
-		err  error
-		node *AuthTokens
-	)
 	atuo.defaults()
-	if len(atuo.hooks) == 0 {
-		node, err = atuo.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*AuthTokensMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			atuo.mutation = mutation
-			node, err = atuo.sqlSave(ctx)
-			mutation.done = true
-			return node, err
-		})
-		for i := len(atuo.hooks) - 1; i >= 0; i-- {
-			if atuo.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = atuo.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, atuo.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*AuthTokens)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from AuthTokensMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, atuo.sqlSave, atuo.mutation, atuo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -375,16 +375,7 @@ func (atuo *AuthTokensUpdateOne) defaults() {
 }
 
 func (atuo *AuthTokensUpdateOne) sqlSave(ctx context.Context) (_node *AuthTokens, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   authtokens.Table,
-			Columns: authtokens.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: authtokens.FieldID,
-			},
-		},
-	}
+	_spec := sqlgraph.NewUpdateSpec(authtokens.Table, authtokens.Columns, sqlgraph.NewFieldSpec(authtokens.FieldID, field.TypeUUID))
 	id, ok := atuo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "AuthTokens.id" for update`)}
@@ -410,25 +401,13 @@ func (atuo *AuthTokensUpdateOne) sqlSave(ctx context.Context) (_node *AuthTokens
 		}
 	}
 	if value, ok := atuo.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: authtokens.FieldUpdatedAt,
-		})
+		_spec.SetField(authtokens.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := atuo.mutation.Token(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBytes,
-			Value:  value,
-			Column: authtokens.FieldToken,
-		})
+		_spec.SetField(authtokens.FieldToken, field.TypeBytes, value)
 	}
 	if value, ok := atuo.mutation.ExpiresAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: authtokens.FieldExpiresAt,
-		})
+		_spec.SetField(authtokens.FieldExpiresAt, field.TypeTime, value)
 	}
 	if atuo.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -438,10 +417,7 @@ func (atuo *AuthTokensUpdateOne) sqlSave(ctx context.Context) (_node *AuthTokens
 			Columns: []string{authtokens.UserColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: user.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -454,10 +430,36 @@ func (atuo *AuthTokensUpdateOne) sqlSave(ctx context.Context) (_node *AuthTokens
 			Columns: []string{authtokens.UserColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: user.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(user.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if atuo.mutation.RolesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   authtokens.RolesTable,
+			Columns: []string{authtokens.RolesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(authroles.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := atuo.mutation.RolesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2O,
+			Inverse: false,
+			Table:   authtokens.RolesTable,
+			Columns: []string{authtokens.RolesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(authroles.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -476,5 +478,6 @@ func (atuo *AuthTokensUpdateOne) sqlSave(ctx context.Context) (_node *AuthTokens
 		}
 		return nil, err
 	}
+	atuo.mutation.done = true
 	return _node, nil
 }

@@ -5,27 +5,29 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hay-kot/homebox/backend/internal/core/services/reporting/eventbus"
 	"github.com/hay-kot/homebox/backend/internal/data/ent"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/group"
-	"github.com/hay-kot/homebox/backend/internal/data/ent/item"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/label"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/predicate"
 )
 
 type LabelRepository struct {
-	db *ent.Client
+	db  *ent.Client
+	bus *eventbus.EventBus
 }
+
 type (
 	LabelCreate struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
+		Name        string `json:"name" validate:"required,min=1,max=255"`
+		Description string `json:"description" validate:"max=255"`
 		Color       string `json:"color"`
 	}
 
 	LabelUpdate struct {
 		ID          uuid.UUID `json:"id"`
-		Name        string    `json:"name"`
-		Description string    `json:"description"`
+		Name        string    `json:"name" validate:"required,min=1,max=255"`
+		Description string    `json:"description" validate:"max=255"`
 		Color       string    `json:"color"`
 	}
 
@@ -39,7 +41,6 @@ type (
 
 	LabelOut struct {
 		LabelSummary
-		Items []ItemSummary `json:"items"`
 	}
 )
 
@@ -61,7 +62,12 @@ var (
 func mapLabelOut(label *ent.Label) LabelOut {
 	return LabelOut{
 		LabelSummary: mapLabelSummary(label),
-		Items:        mapEach(label.Edges.Items, mapItemSummary),
+	}
+}
+
+func (r *LabelRepository) publishMutationEvent(GID uuid.UUID) {
+	if r.bus != nil {
+		r.bus.Publish(eventbus.EventLabelMutation, eventbus.GroupMutationEvent{GID: GID})
 	}
 }
 
@@ -69,9 +75,6 @@ func (r *LabelRepository) getOne(ctx context.Context, where ...predicate.Label) 
 	return mapLabelOutErr(r.db.Label.Query().
 		Where(where...).
 		WithGroup().
-		WithItems(func(iq *ent.ItemQuery) {
-			iq.Where(item.Archived(false))
-		}).
 		Only(ctx),
 	)
 }
@@ -100,12 +103,12 @@ func (r *LabelRepository) Create(ctx context.Context, groupdId uuid.UUID, data L
 		SetColor(data.Color).
 		SetGroupID(groupdId).
 		Save(ctx)
-
 	if err != nil {
 		return LabelOut{}, err
 	}
 
 	label.Edges.Group = &ent.Group{ID: groupdId} // bootstrap group ID
+	r.publishMutationEvent(groupdId)
 	return mapLabelOut(label), err
 }
 
@@ -122,25 +125,19 @@ func (r *LabelRepository) update(ctx context.Context, data LabelUpdate, where ..
 		Save(ctx)
 }
 
-func (r *LabelRepository) Update(ctx context.Context, data LabelUpdate) (LabelOut, error) {
-	_, err := r.update(ctx, data, label.ID(data.ID))
-	if err != nil {
-		return LabelOut{}, err
-	}
-
-	return r.GetOne(ctx, data.ID)
-}
-
 func (r *LabelRepository) UpdateByGroup(ctx context.Context, GID uuid.UUID, data LabelUpdate) (LabelOut, error) {
 	_, err := r.update(ctx, data, label.ID(data.ID), label.HasGroupWith(group.ID(GID)))
 	if err != nil {
 		return LabelOut{}, err
 	}
 
+	r.publishMutationEvent(GID)
 	return r.GetOne(ctx, data.ID)
 }
 
-func (r *LabelRepository) Delete(ctx context.Context, id uuid.UUID) error {
+// delete removes the label from the database. This should only be used when
+// the label's ownership is already confirmed/validated.
+func (r *LabelRepository) delete(ctx context.Context, id uuid.UUID) error {
 	return r.db.Label.DeleteOneID(id).Exec(ctx)
 }
 
@@ -150,6 +147,11 @@ func (r *LabelRepository) DeleteByGroup(ctx context.Context, gid, id uuid.UUID) 
 			label.ID(id),
 			label.HasGroupWith(group.ID(gid)),
 		).Exec(ctx)
+	if err != nil {
+		return err
+	}
 
-	return err
+	r.publishMutationEvent(gid)
+
+	return nil
 }

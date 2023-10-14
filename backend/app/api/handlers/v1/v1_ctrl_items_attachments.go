@@ -2,14 +2,14 @@ package v1
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/hay-kot/homebox/backend/internal/core/services"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/attachment"
 	"github.com/hay-kot/homebox/backend/internal/data/repo"
 	"github.com/hay-kot/homebox/backend/internal/sys/validate"
-	"github.com/hay-kot/homebox/backend/pkgs/server"
+	"github.com/hay-kot/httpkit/errchain"
+	"github.com/hay-kot/httpkit/server"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,19 +19,20 @@ type (
 	}
 )
 
-// HandleItemsImport godocs
-// @Summary  imports items into the database
-// @Tags     Items Attachments
-// @Produce  json
-// @Param    id   path     string true "Item ID"
-// @Param    file formData file   true "File attachment"
-// @Param    type formData string true "Type of file"
-// @Param    name formData string true "name of the file including extension"
-// @Success  200  {object} repo.ItemOut
-// @Failure  422  {object} server.ErrorResponse
-// @Router   /v1/items/{id}/attachments [POST]
-// @Security Bearer
-func (ctrl *V1Controller) HandleItemAttachmentCreate() server.HandlerFunc {
+// HandleItemAttachmentCreate godocs
+//
+//	@Summary  Create Item Attachment
+//	@Tags     Items Attachments
+//	@Produce  json
+//	@Param    id   path     string true "Item ID"
+//	@Param    file formData file   true "File attachment"
+//	@Param    type formData string true "Type of file"
+//	@Param    name formData string true "name of the file including extension"
+//	@Success  200  {object} repo.ItemOut
+//	@Failure  422  {object} validate.ErrorResponse
+//	@Router   /v1/items/{id}/attachments [POST]
+//	@Security Bearer
+func (ctrl *V1Controller) HandleItemAttachmentCreate() errchain.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) error {
 		err := r.ParseMultipartForm(ctrl.maxUploadSize << 20)
 		if err != nil {
@@ -61,7 +62,7 @@ func (ctrl *V1Controller) HandleItemAttachmentCreate() server.HandlerFunc {
 		}
 
 		if !errs.Nil() {
-			return server.Respond(w, http.StatusUnprocessableEntity, errs)
+			return server.JSON(w, http.StatusUnprocessableEntity, errs)
 		}
 
 		attachmentType := r.FormValue("type")
@@ -83,78 +84,53 @@ func (ctrl *V1Controller) HandleItemAttachmentCreate() server.HandlerFunc {
 			attachment.Type(attachmentType),
 			file,
 		)
-
 		if err != nil {
 			log.Err(err).Msg("failed to add attachment")
 			return validate.NewRequestError(err, http.StatusInternalServerError)
 		}
 
-		return server.Respond(w, http.StatusCreated, item)
+		return server.JSON(w, http.StatusCreated, item)
 	}
 }
 
 // HandleItemAttachmentGet godocs
-// @Summary  retrieves an attachment for an item
-// @Tags     Items Attachments
-// @Produce  application/octet-stream
-// @Param    id    path  string true "Item ID"
-// @Param    token query string true "Attachment token"
-// @Success  200
-// @Router   /v1/items/{id}/attachments/download [GET]
-// @Security Bearer
-func (ctrl *V1Controller) HandleItemAttachmentDownload() server.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) error {
-		token := server.GetParam(r, "token", "")
-
-		doc, err := ctrl.svc.Items.AttachmentPath(r.Context(), token)
-
-		if err != nil {
-			log.Err(err).Msg("failed to get attachment")
-			return validate.NewRequestError(err, http.StatusInternalServerError)
-		}
-
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", doc.Title))
-		w.Header().Set("Content-Type", "application/octet-stream")
-		http.ServeFile(w, r, doc.Path)
-		return nil
-	}
-}
-
-// HandleItemAttachmentToken godocs
-// @Summary  retrieves an attachment for an item
-// @Tags     Items Attachments
-// @Produce  application/octet-stream
-// @Param    id            path     string true "Item ID"
-// @Param    attachment_id path     string true "Attachment ID"
-// @Success  200           {object} ItemAttachmentToken
-// @Router   /v1/items/{id}/attachments/{attachment_id} [GET]
-// @Security Bearer
-func (ctrl *V1Controller) HandleItemAttachmentToken() server.HandlerFunc {
+//
+//	@Summary  Get Item Attachment
+//	@Tags     Items Attachments
+//	@Produce  application/octet-stream
+//	@Param    id            path     string true "Item ID"
+//	@Param    attachment_id path     string true "Attachment ID"
+//	@Success  200           {object} ItemAttachmentToken
+//	@Router   /v1/items/{id}/attachments/{attachment_id} [GET]
+//	@Security Bearer
+func (ctrl *V1Controller) HandleItemAttachmentGet() errchain.HandlerFunc {
 	return ctrl.handleItemAttachmentsHandler
 }
 
 // HandleItemAttachmentDelete godocs
-// @Summary  retrieves an attachment for an item
-// @Tags     Items Attachments
-// @Param    id            path string true "Item ID"
-// @Param    attachment_id path string true "Attachment ID"
-// @Success  204
-// @Router   /v1/items/{id}/attachments/{attachment_id} [DELETE]
-// @Security Bearer
-func (ctrl *V1Controller) HandleItemAttachmentDelete() server.HandlerFunc {
+//
+//	@Summary  Delete Item Attachment
+//	@Tags     Items Attachments
+//	@Param    id            path string true "Item ID"
+//	@Param    attachment_id path string true "Attachment ID"
+//	@Success  204
+//	@Router   /v1/items/{id}/attachments/{attachment_id} [DELETE]
+//	@Security Bearer
+func (ctrl *V1Controller) HandleItemAttachmentDelete() errchain.HandlerFunc {
 	return ctrl.handleItemAttachmentsHandler
 }
 
 // HandleItemAttachmentUpdate godocs
-// @Summary  retrieves an attachment for an item
-// @Tags     Items Attachments
-// @Param    id            path     string                    true "Item ID"
-// @Param    attachment_id path     string                    true "Attachment ID"
-// @Param    payload       body     repo.ItemAttachmentUpdate true "Attachment Update"
-// @Success  200           {object} repo.ItemOut
-// @Router   /v1/items/{id}/attachments/{attachment_id} [PUT]
-// @Security Bearer
-func (ctrl *V1Controller) HandleItemAttachmentUpdate() server.HandlerFunc {
+//
+//	@Summary  Update Item Attachment
+//	@Tags     Items Attachments
+//	@Param    id            path     string                    true "Item ID"
+//	@Param    attachment_id path     string                    true "Attachment ID"
+//	@Param    payload       body     repo.ItemAttachmentUpdate true "Attachment Update"
+//	@Success  200           {object} repo.ItemOut
+//	@Router   /v1/items/{id}/attachments/{attachment_id} [PUT]
+//	@Security Bearer
+func (ctrl *V1Controller) HandleItemAttachmentUpdate() errchain.HandlerFunc {
 	return ctrl.handleItemAttachmentsHandler
 }
 
@@ -171,33 +147,15 @@ func (ctrl *V1Controller) handleItemAttachmentsHandler(w http.ResponseWriter, r 
 
 	ctx := services.NewContext(r.Context())
 	switch r.Method {
-	// Token Handler
 	case http.MethodGet:
-		token, err := ctrl.svc.Items.AttachmentToken(ctx, ID, attachmentID)
+		doc, err := ctrl.svc.Items.AttachmentPath(r.Context(), attachmentID)
 		if err != nil {
-			switch err {
-			case services.ErrNotFound:
-				log.Err(err).
-					Str("id", attachmentID.String()).
-					Msg("failed to find attachment with id")
-
-				return validate.NewRequestError(err, http.StatusNotFound)
-
-			case services.ErrFileNotFound:
-				log.Err(err).
-					Str("id", attachmentID.String()).
-					Msg("failed to find file path for attachment with id")
-				log.Warn().Msg("attachment with no file path removed from database")
-
-				return validate.NewRequestError(err, http.StatusNotFound)
-
-			default:
-				log.Err(err).Msg("failed to get attachment")
-				return validate.NewRequestError(err, http.StatusInternalServerError)
-			}
+			log.Err(err).Msg("failed to get attachment path")
+			return validate.NewRequestError(err, http.StatusInternalServerError)
 		}
 
-		return server.Respond(w, http.StatusOK, ItemAttachmentToken{Token: token})
+		http.ServeFile(w, r, doc.Path)
+		return nil
 
 	// Delete Attachment Handler
 	case http.MethodDelete:
@@ -207,7 +165,7 @@ func (ctrl *V1Controller) handleItemAttachmentsHandler(w http.ResponseWriter, r 
 			return validate.NewRequestError(err, http.StatusInternalServerError)
 		}
 
-		return server.Respond(w, http.StatusNoContent, nil)
+		return server.JSON(w, http.StatusNoContent, nil)
 
 	// Update Attachment Handler
 	case http.MethodPut:
@@ -225,7 +183,7 @@ func (ctrl *V1Controller) handleItemAttachmentsHandler(w http.ResponseWriter, r 
 			return validate.NewRequestError(err, http.StatusInternalServerError)
 		}
 
-		return server.Respond(w, http.StatusOK, val)
+		return server.JSON(w, http.StatusOK, val)
 	}
 
 	return nil

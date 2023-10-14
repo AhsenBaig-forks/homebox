@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/google/uuid"
 )
 
@@ -20,6 +22,8 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
+	// FieldPrimary holds the string denoting the primary field in the database.
+	FieldPrimary = "primary"
 	// EdgeItem holds the string denoting the item edge name in mutations.
 	EdgeItem = "item"
 	// EdgeDocument holds the string denoting the document edge name in mutations.
@@ -48,6 +52,7 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldUpdatedAt,
 	FieldType,
+	FieldPrimary,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "attachments"
@@ -79,6 +84,8 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
+	// DefaultPrimary holds the default value on creation for the "primary" field.
+	DefaultPrimary bool
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() uuid.UUID
 )
@@ -110,4 +117,60 @@ func TypeValidator(_type Type) error {
 	default:
 		return fmt.Errorf("attachment: invalid enum value for type field: %q", _type)
 	}
+}
+
+// OrderOption defines the ordering options for the Attachment queries.
+type OrderOption func(*sql.Selector)
+
+// ByID orders the results by the id field.
+func ByID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByCreatedAt orders the results by the created_at field.
+func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByUpdatedAt orders the results by the updated_at field.
+func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
+}
+
+// ByType orders the results by the type field.
+func ByType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldType, opts...).ToFunc()
+}
+
+// ByPrimary orders the results by the primary field.
+func ByPrimary(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPrimary, opts...).ToFunc()
+}
+
+// ByItemField orders the results by item field.
+func ByItemField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newItemStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByDocumentField orders the results by document field.
+func ByDocumentField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newDocumentStep(), sql.OrderByField(field, opts...))
+	}
+}
+func newItemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, ItemTable, ItemColumn),
+	)
+}
+func newDocumentStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(DocumentInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, DocumentTable, DocumentColumn),
+	)
 }

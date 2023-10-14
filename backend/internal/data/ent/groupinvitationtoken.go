@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/group"
@@ -32,6 +33,7 @@ type GroupInvitationToken struct {
 	// The values are being populated by the GroupInvitationTokenQuery when eager-loading is set.
 	Edges                   GroupInvitationTokenEdges `json:"edges"`
 	group_invitation_tokens *uuid.UUID
+	selectValues            sql.SelectValues
 }
 
 // GroupInvitationTokenEdges holds the relations/edges for other nodes in the graph.
@@ -72,7 +74,7 @@ func (*GroupInvitationToken) scanValues(columns []string) ([]any, error) {
 		case groupinvitationtoken.ForeignKeys[0]: // group_invitation_tokens
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		default:
-			return nil, fmt.Errorf("unexpected column %q for type GroupInvitationToken", columns[i])
+			values[i] = new(sql.UnknownType)
 		}
 	}
 	return values, nil
@@ -129,21 +131,29 @@ func (git *GroupInvitationToken) assignValues(columns []string, values []any) er
 				git.group_invitation_tokens = new(uuid.UUID)
 				*git.group_invitation_tokens = *value.S.(*uuid.UUID)
 			}
+		default:
+			git.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
 }
 
+// Value returns the ent.Value that was dynamically selected and assigned to the GroupInvitationToken.
+// This includes values selected through modifiers, order, etc.
+func (git *GroupInvitationToken) Value(name string) (ent.Value, error) {
+	return git.selectValues.Get(name)
+}
+
 // QueryGroup queries the "group" edge of the GroupInvitationToken entity.
 func (git *GroupInvitationToken) QueryGroup() *GroupQuery {
-	return (&GroupInvitationTokenClient{config: git.config}).QueryGroup(git)
+	return NewGroupInvitationTokenClient(git.config).QueryGroup(git)
 }
 
 // Update returns a builder for updating this GroupInvitationToken.
 // Note that you need to call GroupInvitationToken.Unwrap() before calling this method if this GroupInvitationToken
 // was returned from a transaction, and the transaction was committed or rolled back.
 func (git *GroupInvitationToken) Update() *GroupInvitationTokenUpdateOne {
-	return (&GroupInvitationTokenClient{config: git.config}).UpdateOne(git)
+	return NewGroupInvitationTokenClient(git.config).UpdateOne(git)
 }
 
 // Unwrap unwraps the GroupInvitationToken entity that was returned from a transaction after it was closed,
@@ -182,9 +192,3 @@ func (git *GroupInvitationToken) String() string {
 
 // GroupInvitationTokens is a parsable slice of GroupInvitationToken.
 type GroupInvitationTokens []*GroupInvitationToken
-
-func (git GroupInvitationTokens) config(cfg config) {
-	for _i := range git {
-		git[_i].config = cfg
-	}
-}

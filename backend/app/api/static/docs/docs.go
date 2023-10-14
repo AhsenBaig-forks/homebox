@@ -13,14 +13,144 @@ const docTemplate = `{
         "contact": {
             "name": "Don't"
         },
-        "license": {
-            "name": "MIT"
-        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/v1/actions/ensure-asset-ids": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Ensures all items in the database have an asset ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Actions"
+                ],
+                "summary": "Ensure Asset IDs",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ActionAmountResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/actions/ensure-import-refs": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Ensures all items in the database have an import ref",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Actions"
+                ],
+                "summary": "Ensures Import Refs",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ActionAmountResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/actions/set-primary-photos": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Sets the first photo of each item as the primary photo",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Actions"
+                ],
+                "summary": "Set Primary Photos",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ActionAmountResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/actions/zero-item-time-fields": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Resets all item date fields to the beginning of the day",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Actions"
+                ],
+                "summary": "Zero Out Time Fields",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/v1.ActionAmountResult"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/assets/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Get Item by Asset ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Asset ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/repo.PaginationResult-repo_ItemSummary"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/groups": {
             "get": {
                 "security": [
@@ -34,7 +164,7 @@ const docTemplate = `{
                 "tags": [
                     "Group"
                 ],
-                "summary": "Get the current user's group",
+                "summary": "Get Group",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -56,7 +186,7 @@ const docTemplate = `{
                 "tags": [
                     "Group"
                 ],
-                "summary": "Updates some fields of the current users group",
+                "summary": "Update Group",
                 "parameters": [
                     {
                         "description": "User Data",
@@ -91,7 +221,7 @@ const docTemplate = `{
                 "tags": [
                     "Group"
                 ],
-                "summary": "Get the current user",
+                "summary": "Create Group Invitation",
                 "parameters": [
                     {
                         "description": "User Data",
@@ -124,14 +254,106 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Group"
+                    "Statistics"
                 ],
-                "summary": "Get the current user's group",
+                "summary": "Get Group Statistics",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/repo.GroupStatistics"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/groups/statistics/labels": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get Label Statistics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/repo.TotalsByOrganizer"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/groups/statistics/locations": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get Location Statistics",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/repo.TotalsByOrganizer"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/groups/statistics/purchase-price": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Statistics"
+                ],
+                "summary": "Get Purchase Price Statistics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "start date",
+                        "name": "start",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "end date",
+                        "name": "end",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/repo.ValueOverTime"
                         }
                     }
                 }
@@ -150,7 +372,7 @@ const docTemplate = `{
                 "tags": [
                     "Items"
                 ],
-                "summary": "Get All Items",
+                "summary": "Query All Items",
                 "parameters": [
                     {
                         "type": "string",
@@ -212,7 +434,7 @@ const docTemplate = `{
                 "tags": [
                     "Items"
                 ],
-                "summary": "Create a new item",
+                "summary": "Create Item",
                 "parameters": [
                     {
                         "description": "Item Data",
@@ -225,10 +447,85 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/repo.ItemSummary"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/items/export": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Export Items",
+                "responses": {
+                    "200": {
+                        "description": "text/csv",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/items/fields": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Get All Custom Field Names",
+                "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/repo.ItemSummary"
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/items/fields/values": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Get All Custom Field Values",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -247,7 +544,7 @@ const docTemplate = `{
                 "tags": [
                     "Items"
                 ],
-                "summary": "imports items into the database",
+                "summary": "Import Items",
                 "parameters": [
                     {
                         "type": "file",
@@ -277,7 +574,7 @@ const docTemplate = `{
                 "tags": [
                     "Items"
                 ],
-                "summary": "Gets a item and fields",
+                "summary": "Get Item",
                 "parameters": [
                     {
                         "type": "string",
@@ -308,7 +605,7 @@ const docTemplate = `{
                 "tags": [
                     "Items"
                 ],
-                "summary": "updates a item",
+                "summary": "Update Item",
                 "parameters": [
                     {
                         "type": "string",
@@ -348,7 +645,7 @@ const docTemplate = `{
                 "tags": [
                     "Items"
                 ],
-                "summary": "deletes a item",
+                "summary": "Delete Item",
                 "parameters": [
                     {
                         "type": "string",
@@ -361,6 +658,46 @@ const docTemplate = `{
                 "responses": {
                     "204": {
                         "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Update Item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Item ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Item Data",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/repo.ItemPatch"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/repo.ItemOut"
+                        }
                     }
                 }
             }
@@ -378,7 +715,7 @@ const docTemplate = `{
                 "tags": [
                     "Items Attachments"
                 ],
-                "summary": "imports items into the database",
+                "summary": "Create Item Attachment",
                 "parameters": [
                     {
                         "type": "string",
@@ -419,45 +756,8 @@ const docTemplate = `{
                     "422": {
                         "description": "Unprocessable Entity",
                         "schema": {
-                            "$ref": "#/definitions/server.ErrorResponse"
+                            "$ref": "#/definitions/validate.ErrorResponse"
                         }
-                    }
-                }
-            }
-        },
-        "/v1/items/{id}/attachments/download": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "produces": [
-                    "application/octet-stream"
-                ],
-                "tags": [
-                    "Items Attachments"
-                ],
-                "summary": "retrieves an attachment for an item",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Item ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Attachment token",
-                        "name": "token",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK"
                     }
                 }
             }
@@ -475,7 +775,7 @@ const docTemplate = `{
                 "tags": [
                     "Items Attachments"
                 ],
-                "summary": "retrieves an attachment for an item",
+                "summary": "Get Item Attachment",
                 "parameters": [
                     {
                         "type": "string",
@@ -510,7 +810,7 @@ const docTemplate = `{
                 "tags": [
                     "Items Attachments"
                 ],
-                "summary": "retrieves an attachment for an item",
+                "summary": "Update Item Attachment",
                 "parameters": [
                     {
                         "type": "string",
@@ -554,7 +854,7 @@ const docTemplate = `{
                 "tags": [
                     "Items Attachments"
                 ],
-                "summary": "retrieves an attachment for an item",
+                "summary": "Delete Item Attachment",
                 "parameters": [
                     {
                         "type": "string",
@@ -571,6 +871,117 @@ const docTemplate = `{
                         "required": true
                     }
                 ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/v1/items/{id}/maintenance": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Maintenance"
+                ],
+                "summary": "Get Maintenance Log",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/repo.MaintenanceLog"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Maintenance"
+                ],
+                "summary": "Create Maintenance Entry",
+                "parameters": [
+                    {
+                        "description": "Entry Data",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/repo.MaintenanceEntryCreate"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/repo.MaintenanceEntry"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/items/{id}/maintenance/{entry_id}": {
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Maintenance"
+                ],
+                "summary": "Update Maintenance Entry",
+                "parameters": [
+                    {
+                        "description": "Entry Data",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/repo.MaintenanceEntryUpdate"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/repo.MaintenanceEntry"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Maintenance"
+                ],
+                "summary": "Delete Maintenance Entry",
                 "responses": {
                     "204": {
                         "description": "No Content"
@@ -596,22 +1007,10 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/server.Results"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "items": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/repo.LabelOut"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/repo.LabelOut"
+                            }
                         }
                     }
                 }
@@ -628,7 +1027,7 @@ const docTemplate = `{
                 "tags": [
                     "Labels"
                 ],
-                "summary": "Create a new label",
+                "summary": "Create Label",
                 "parameters": [
                     {
                         "description": "Label Data",
@@ -663,7 +1062,7 @@ const docTemplate = `{
                 "tags": [
                     "Labels"
                 ],
-                "summary": "Gets a label and fields",
+                "summary": "Get Label",
                 "parameters": [
                     {
                         "type": "string",
@@ -694,7 +1093,7 @@ const docTemplate = `{
                 "tags": [
                     "Labels"
                 ],
-                "summary": "updates a label",
+                "summary": "Update Label",
                 "parameters": [
                     {
                         "type": "string",
@@ -725,7 +1124,7 @@ const docTemplate = `{
                 "tags": [
                     "Labels"
                 ],
-                "summary": "deletes a label",
+                "summary": "Delete Label",
                 "parameters": [
                     {
                         "type": "string",
@@ -768,22 +1167,10 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/server.Results"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "items": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/repo.LocationOutCount"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/repo.LocationOutCount"
+                            }
                         }
                     }
                 }
@@ -800,7 +1187,7 @@ const docTemplate = `{
                 "tags": [
                     "Locations"
                 ],
-                "summary": "Create a new location",
+                "summary": "Create Location",
                 "parameters": [
                     {
                         "description": "Location Data",
@@ -822,6 +1209,41 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/locations/tree": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Locations"
+                ],
+                "summary": "Get Locations Tree",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "include items in response tree",
+                        "name": "withItems",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/repo.TreeItem"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/v1/locations/{id}": {
             "get": {
                 "security": [
@@ -835,7 +1257,7 @@ const docTemplate = `{
                 "tags": [
                     "Locations"
                 ],
-                "summary": "Gets a location and fields",
+                "summary": "Get Location",
                 "parameters": [
                     {
                         "type": "string",
@@ -866,7 +1288,7 @@ const docTemplate = `{
                 "tags": [
                     "Locations"
                 ],
-                "summary": "updates a location",
+                "summary": "Update Location",
                 "parameters": [
                     {
                         "type": "string",
@@ -906,7 +1328,7 @@ const docTemplate = `{
                 "tags": [
                     "Locations"
                 ],
-                "summary": "deletes a location",
+                "summary": "Delete Location",
                 "parameters": [
                     {
                         "type": "string",
@@ -923,6 +1345,223 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/notifiers": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notifiers"
+                ],
+                "summary": "Get Notifiers",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/repo.NotifierOut"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notifiers"
+                ],
+                "summary": "Create Notifier",
+                "parameters": [
+                    {
+                        "description": "Notifier Data",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/repo.NotifierCreate"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/repo.NotifierOut"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/notifiers/test": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Notifiers"
+                ],
+                "summary": "Test Notifier",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Notifier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "URL",
+                        "name": "url",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/v1/notifiers/{id}": {
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "tags": [
+                    "Notifiers"
+                ],
+                "summary": "Update Notifier",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Notifier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Notifier Data",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/repo.NotifierUpdate"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/repo.NotifierOut"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "tags": [
+                    "Notifiers"
+                ],
+                "summary": "Delete a Notifier",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Notifier ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
+        "/v1/qrcode": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Items"
+                ],
+                "summary": "Create QR Code",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "data to be encoded into qrcode",
+                        "name": "data",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "image/jpeg",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/reporting/bill-of-materials": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Reporting"
+                ],
+                "summary": "Export Bill of Materials",
+                "responses": {
+                    "200": {
+                        "description": "text/csv",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/status": {
             "get": {
                 "produces": [
@@ -931,7 +1570,7 @@ const docTemplate = `{
                 "tags": [
                     "Base"
                 ],
-                "summary": "Retrieves the basic information about the API",
+                "summary": "Application Info",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -952,7 +1591,7 @@ const docTemplate = `{
                 "tags": [
                     "User"
                 ],
-                "summary": "Updates the users password",
+                "summary": "Change Password",
                 "parameters": [
                     {
                         "description": "Password Payload",
@@ -998,6 +1637,15 @@ const docTemplate = `{
                         "description": "string",
                         "name": "password",
                         "in": "formData"
+                    },
+                    {
+                        "description": "Login Data",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/v1.LoginForm"
+                        }
                     }
                 ],
                 "responses": {
@@ -1055,7 +1703,7 @@ const docTemplate = `{
                 "tags": [
                     "User"
                 ],
-                "summary": "Get the current user",
+                "summary": "Register New User",
                 "parameters": [
                     {
                         "description": "User Data",
@@ -1087,14 +1735,14 @@ const docTemplate = `{
                 "tags": [
                     "User"
                 ],
-                "summary": "Get the current user",
+                "summary": "Get User Self",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/server.Result"
+                                    "$ref": "#/definitions/v1.Wrapped"
                                 },
                                 {
                                     "type": "object",
@@ -1121,7 +1769,7 @@ const docTemplate = `{
                 "tags": [
                     "User"
                 ],
-                "summary": "Update the current user",
+                "summary": "Update Account",
                 "parameters": [
                     {
                         "description": "User Data",
@@ -1139,7 +1787,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/server.Result"
+                                    "$ref": "#/definitions/v1.Wrapped"
                                 },
                                 {
                                     "type": "object",
@@ -1166,7 +1814,7 @@ const docTemplate = `{
                 "tags": [
                     "User"
                 ],
-                "summary": "Deletes the user account",
+                "summary": "Delete Account",
                 "responses": {
                     "204": {
                         "description": "No Content"
@@ -1213,6 +1861,9 @@ const docTemplate = `{
         "repo.GroupStatistics": {
             "type": "object",
             "properties": {
+                "totalItemPrice": {
+                    "type": "number"
+                },
                 "totalItems": {
                     "type": "integer"
                 },
@@ -1223,6 +1874,9 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "totalUsers": {
+                    "type": "integer"
+                },
+                "totalWithWarranty": {
                     "type": "integer"
                 }
             }
@@ -1250,6 +1904,9 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "primary": {
+                    "type": "boolean"
+                },
                 "type": {
                     "type": "string"
                 },
@@ -1261,6 +1918,9 @@ const docTemplate = `{
         "repo.ItemAttachmentUpdate": {
             "type": "object",
             "properties": {
+                "primary": {
+                    "type": "boolean"
+                },
                 "title": {
                     "type": "string"
                 },
@@ -1271,9 +1931,13 @@ const docTemplate = `{
         },
         "repo.ItemCreate": {
             "type": "object",
+            "required": [
+                "name"
+            ],
             "properties": {
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 1000
                 },
                 "labelIds": {
                     "type": "array",
@@ -1286,7 +1950,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
                 },
                 "parentId": {
                     "type": "string",
@@ -1312,9 +1978,6 @@ const docTemplate = `{
                 "textValue": {
                     "type": "string"
                 },
-                "timeValue": {
-                    "type": "string"
-                },
                 "type": {
                     "type": "string"
                 }
@@ -1325,6 +1988,10 @@ const docTemplate = `{
             "properties": {
                 "archived": {
                     "type": "boolean"
+                },
+                "assetId": {
+                    "type": "string",
+                    "example": "0"
                 },
                 "attachments": {
                     "type": "array",
@@ -1351,6 +2018,9 @@ const docTemplate = `{
                     }
                 },
                 "id": {
+                    "type": "string"
+                },
+                "imageId": {
                     "type": "string"
                 },
                 "insured": {
@@ -1432,6 +2102,19 @@ const docTemplate = `{
                 }
             }
         },
+        "repo.ItemPatch": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "integer",
+                    "x-nullable": true,
+                    "x-omitempty": true
+                }
+            }
+        },
         "repo.ItemSummary": {
             "type": "object",
             "properties": {
@@ -1445,6 +2128,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
+                    "type": "string"
+                },
+                "imageId": {
                     "type": "string"
                 },
                 "insured": {
@@ -1465,6 +2151,10 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
+                "purchasePrice": {
+                    "type": "string",
+                    "example": "0"
+                },
                 "quantity": {
                     "type": "integer"
                 },
@@ -1478,6 +2168,9 @@ const docTemplate = `{
             "properties": {
                 "archived": {
                     "type": "boolean"
+                },
+                "assetId": {
+                    "type": "string"
                 },
                 "description": {
                     "type": "string"
@@ -1562,21 +2255,28 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "warrantyExpires": {
+                    "description": "Sold",
                     "type": "string"
                 }
             }
         },
         "repo.LabelCreate": {
             "type": "object",
+            "required": [
+                "name"
+            ],
             "properties": {
                 "color": {
                     "type": "string"
                 },
                 "description": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255
                 },
                 "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
                 }
             }
         },
@@ -1591,12 +2291,6 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "string"
-                },
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/repo.ItemSummary"
-                    }
                 },
                 "name": {
                     "type": "string"
@@ -1634,6 +2328,10 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "parentId": {
+                    "type": "string",
+                    "x-nullable": true
                 }
             }
         },
@@ -1654,12 +2352,6 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "string"
-                },
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/repo.ItemSummary"
-                    }
                 },
                 "name": {
                     "type": "string"
@@ -1733,6 +2425,167 @@ const docTemplate = `{
                 }
             }
         },
+        "repo.MaintenanceEntry": {
+            "type": "object",
+            "properties": {
+                "completedDate": {
+                    "description": "Sold",
+                    "type": "string"
+                },
+                "cost": {
+                    "type": "string",
+                    "example": "0"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "scheduledDate": {
+                    "description": "Sold",
+                    "type": "string"
+                }
+            }
+        },
+        "repo.MaintenanceEntryCreate": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "completedDate": {
+                    "description": "Sold",
+                    "type": "string"
+                },
+                "cost": {
+                    "type": "string",
+                    "example": "0"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "scheduledDate": {
+                    "description": "Sold",
+                    "type": "string"
+                }
+            }
+        },
+        "repo.MaintenanceEntryUpdate": {
+            "type": "object",
+            "properties": {
+                "completedDate": {
+                    "description": "Sold",
+                    "type": "string"
+                },
+                "cost": {
+                    "type": "string",
+                    "example": "0"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "scheduledDate": {
+                    "description": "Sold",
+                    "type": "string"
+                }
+            }
+        },
+        "repo.MaintenanceLog": {
+            "type": "object",
+            "properties": {
+                "costAverage": {
+                    "type": "number"
+                },
+                "costTotal": {
+                    "type": "number"
+                },
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/repo.MaintenanceEntry"
+                    }
+                },
+                "itemId": {
+                    "type": "string"
+                }
+            }
+        },
+        "repo.NotifierCreate": {
+            "type": "object",
+            "required": [
+                "name",
+                "url"
+            ],
+            "properties": {
+                "isActive": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "repo.NotifierOut": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "groupId": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "repo.NotifierUpdate": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "isActive": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "url": {
+                    "type": "string",
+                    "x-nullable": true
+                }
+            }
+        },
         "repo.PaginationResult-repo_ItemSummary": {
             "type": "object",
             "properties": {
@@ -1750,6 +2603,40 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "repo.TotalsByOrganizer": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "total": {
+                    "type": "number"
+                }
+            }
+        },
+        "repo.TreeItem": {
+            "type": "object",
+            "properties": {
+                "children": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/repo.TreeItem"
+                    }
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
                 }
             }
         },
@@ -1790,37 +2677,41 @@ const docTemplate = `{
                 }
             }
         },
-        "server.ErrorResponse": {
+        "repo.ValueOverTime": {
             "type": "object",
             "properties": {
-                "error": {
+                "end": {
                     "type": "string"
                 },
-                "fields": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/repo.ValueOverTimeEntry"
                     }
-                }
-            }
-        },
-        "server.Result": {
-            "type": "object",
-            "properties": {
-                "details": {},
-                "error": {
-                    "type": "boolean"
                 },
-                "item": {},
-                "message": {
+                "start": {
                     "type": "string"
+                },
+                "valueAtEnd": {
+                    "type": "number"
+                },
+                "valueAtStart": {
+                    "type": "number"
                 }
             }
         },
-        "server.Results": {
+        "repo.ValueOverTimeEntry": {
             "type": "object",
             "properties": {
-                "items": {}
+                "date": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
             }
         },
         "services.UserRegistration": {
@@ -1840,9 +2731,20 @@ const docTemplate = `{
                 }
             }
         },
+        "v1.ActionAmountResult": {
+            "type": "object",
+            "properties": {
+                "completed": {
+                    "type": "integer"
+                }
+            }
+        },
         "v1.ApiSummary": {
             "type": "object",
             "properties": {
+                "allowRegistration": {
+                    "type": "boolean"
+                },
                 "build": {
                     "$ref": "#/definitions/v1.Build"
                 },
@@ -1907,12 +2809,17 @@ const docTemplate = `{
         },
         "v1.GroupInvitationCreate": {
             "type": "object",
+            "required": [
+                "uses"
+            ],
             "properties": {
                 "expiresAt": {
                     "type": "string"
                 },
                 "uses": {
-                    "type": "integer"
+                    "type": "integer",
+                    "maximum": 100,
+                    "minimum": 1
                 }
             }
         },
@@ -1924,13 +2831,47 @@ const docTemplate = `{
                 }
             }
         },
+        "v1.LoginForm": {
+            "type": "object",
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "stayLoggedIn": {
+                    "type": "boolean"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "v1.TokenResponse": {
             "type": "object",
             "properties": {
+                "attachmentToken": {
+                    "type": "string"
+                },
                 "expiresAt": {
                     "type": "string"
                 },
                 "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "v1.Wrapped": {
+            "type": "object",
+            "properties": {
+                "item": {}
+            }
+        },
+        "validate.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "fields": {
                     "type": "string"
                 }
             }
@@ -1952,8 +2893,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "",
 	BasePath:         "/api",
 	Schemes:          []string{},
-	Title:            "Go API Templates",
-	Description:      "This is a simple Rest API Server Template that implements some basic User and Authentication patterns to help you get started and bootstrap your next project!.",
+	Title:            "Homebox API",
+	Description:      "Track, Manage, and Organize your Things.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 }

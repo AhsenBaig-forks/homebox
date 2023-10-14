@@ -14,7 +14,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/attachment"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/document"
-	"github.com/hay-kot/homebox/backend/internal/data/ent/documenttoken"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/group"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/predicate"
 )
@@ -61,21 +60,6 @@ func (du *DocumentUpdate) SetGroup(g *Group) *DocumentUpdate {
 	return du.SetGroupID(g.ID)
 }
 
-// AddDocumentTokenIDs adds the "document_tokens" edge to the DocumentToken entity by IDs.
-func (du *DocumentUpdate) AddDocumentTokenIDs(ids ...uuid.UUID) *DocumentUpdate {
-	du.mutation.AddDocumentTokenIDs(ids...)
-	return du
-}
-
-// AddDocumentTokens adds the "document_tokens" edges to the DocumentToken entity.
-func (du *DocumentUpdate) AddDocumentTokens(d ...*DocumentToken) *DocumentUpdate {
-	ids := make([]uuid.UUID, len(d))
-	for i := range d {
-		ids[i] = d[i].ID
-	}
-	return du.AddDocumentTokenIDs(ids...)
-}
-
 // AddAttachmentIDs adds the "attachments" edge to the Attachment entity by IDs.
 func (du *DocumentUpdate) AddAttachmentIDs(ids ...uuid.UUID) *DocumentUpdate {
 	du.mutation.AddAttachmentIDs(ids...)
@@ -102,27 +86,6 @@ func (du *DocumentUpdate) ClearGroup() *DocumentUpdate {
 	return du
 }
 
-// ClearDocumentTokens clears all "document_tokens" edges to the DocumentToken entity.
-func (du *DocumentUpdate) ClearDocumentTokens() *DocumentUpdate {
-	du.mutation.ClearDocumentTokens()
-	return du
-}
-
-// RemoveDocumentTokenIDs removes the "document_tokens" edge to DocumentToken entities by IDs.
-func (du *DocumentUpdate) RemoveDocumentTokenIDs(ids ...uuid.UUID) *DocumentUpdate {
-	du.mutation.RemoveDocumentTokenIDs(ids...)
-	return du
-}
-
-// RemoveDocumentTokens removes "document_tokens" edges to DocumentToken entities.
-func (du *DocumentUpdate) RemoveDocumentTokens(d ...*DocumentToken) *DocumentUpdate {
-	ids := make([]uuid.UUID, len(d))
-	for i := range d {
-		ids[i] = d[i].ID
-	}
-	return du.RemoveDocumentTokenIDs(ids...)
-}
-
 // ClearAttachments clears all "attachments" edges to the Attachment entity.
 func (du *DocumentUpdate) ClearAttachments() *DocumentUpdate {
 	du.mutation.ClearAttachments()
@@ -146,41 +109,8 @@ func (du *DocumentUpdate) RemoveAttachments(a ...*Attachment) *DocumentUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (du *DocumentUpdate) Save(ctx context.Context) (int, error) {
-	var (
-		err      error
-		affected int
-	)
 	du.defaults()
-	if len(du.hooks) == 0 {
-		if err = du.check(); err != nil {
-			return 0, err
-		}
-		affected, err = du.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*DocumentMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = du.check(); err != nil {
-				return 0, err
-			}
-			du.mutation = mutation
-			affected, err = du.sqlSave(ctx)
-			mutation.done = true
-			return affected, err
-		})
-		for i := len(du.hooks) - 1; i >= 0; i-- {
-			if du.hooks[i] == nil {
-				return 0, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = du.hooks[i](mut)
-		}
-		if _, err := mut.Mutate(ctx, du.mutation); err != nil {
-			return 0, err
-		}
-	}
-	return affected, err
+	return withHooks(ctx, du.sqlSave, du.mutation, du.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -232,16 +162,10 @@ func (du *DocumentUpdate) check() error {
 }
 
 func (du *DocumentUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   document.Table,
-			Columns: document.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: document.FieldID,
-			},
-		},
+	if err := du.check(); err != nil {
+		return n, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(document.Table, document.Columns, sqlgraph.NewFieldSpec(document.FieldID, field.TypeUUID))
 	if ps := du.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -250,25 +174,13 @@ func (du *DocumentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 	}
 	if value, ok := du.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: document.FieldUpdatedAt,
-		})
+		_spec.SetField(document.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := du.mutation.Title(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: document.FieldTitle,
-		})
+		_spec.SetField(document.FieldTitle, field.TypeString, value)
 	}
 	if value, ok := du.mutation.Path(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: document.FieldPath,
-		})
+		_spec.SetField(document.FieldPath, field.TypeString, value)
 	}
 	if du.mutation.GroupCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -278,10 +190,7 @@ func (du *DocumentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{document.GroupColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -294,64 +203,7 @@ func (du *DocumentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{document.GroupColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if du.mutation.DocumentTokensCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   document.DocumentTokensTable,
-			Columns: []string{document.DocumentTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: documenttoken.FieldID,
-				},
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := du.mutation.RemovedDocumentTokensIDs(); len(nodes) > 0 && !du.mutation.DocumentTokensCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   document.DocumentTokensTable,
-			Columns: []string{document.DocumentTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: documenttoken.FieldID,
-				},
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := du.mutation.DocumentTokensIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   document.DocumentTokensTable,
-			Columns: []string{document.DocumentTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: documenttoken.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -367,10 +219,7 @@ func (du *DocumentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{document.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -383,10 +232,7 @@ func (du *DocumentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{document.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -402,10 +248,7 @@ func (du *DocumentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{document.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -421,6 +264,7 @@ func (du *DocumentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
+	du.mutation.done = true
 	return n, nil
 }
 
@@ -461,21 +305,6 @@ func (duo *DocumentUpdateOne) SetGroup(g *Group) *DocumentUpdateOne {
 	return duo.SetGroupID(g.ID)
 }
 
-// AddDocumentTokenIDs adds the "document_tokens" edge to the DocumentToken entity by IDs.
-func (duo *DocumentUpdateOne) AddDocumentTokenIDs(ids ...uuid.UUID) *DocumentUpdateOne {
-	duo.mutation.AddDocumentTokenIDs(ids...)
-	return duo
-}
-
-// AddDocumentTokens adds the "document_tokens" edges to the DocumentToken entity.
-func (duo *DocumentUpdateOne) AddDocumentTokens(d ...*DocumentToken) *DocumentUpdateOne {
-	ids := make([]uuid.UUID, len(d))
-	for i := range d {
-		ids[i] = d[i].ID
-	}
-	return duo.AddDocumentTokenIDs(ids...)
-}
-
 // AddAttachmentIDs adds the "attachments" edge to the Attachment entity by IDs.
 func (duo *DocumentUpdateOne) AddAttachmentIDs(ids ...uuid.UUID) *DocumentUpdateOne {
 	duo.mutation.AddAttachmentIDs(ids...)
@@ -502,27 +331,6 @@ func (duo *DocumentUpdateOne) ClearGroup() *DocumentUpdateOne {
 	return duo
 }
 
-// ClearDocumentTokens clears all "document_tokens" edges to the DocumentToken entity.
-func (duo *DocumentUpdateOne) ClearDocumentTokens() *DocumentUpdateOne {
-	duo.mutation.ClearDocumentTokens()
-	return duo
-}
-
-// RemoveDocumentTokenIDs removes the "document_tokens" edge to DocumentToken entities by IDs.
-func (duo *DocumentUpdateOne) RemoveDocumentTokenIDs(ids ...uuid.UUID) *DocumentUpdateOne {
-	duo.mutation.RemoveDocumentTokenIDs(ids...)
-	return duo
-}
-
-// RemoveDocumentTokens removes "document_tokens" edges to DocumentToken entities.
-func (duo *DocumentUpdateOne) RemoveDocumentTokens(d ...*DocumentToken) *DocumentUpdateOne {
-	ids := make([]uuid.UUID, len(d))
-	for i := range d {
-		ids[i] = d[i].ID
-	}
-	return duo.RemoveDocumentTokenIDs(ids...)
-}
-
 // ClearAttachments clears all "attachments" edges to the Attachment entity.
 func (duo *DocumentUpdateOne) ClearAttachments() *DocumentUpdateOne {
 	duo.mutation.ClearAttachments()
@@ -544,6 +352,12 @@ func (duo *DocumentUpdateOne) RemoveAttachments(a ...*Attachment) *DocumentUpdat
 	return duo.RemoveAttachmentIDs(ids...)
 }
 
+// Where appends a list predicates to the DocumentUpdate builder.
+func (duo *DocumentUpdateOne) Where(ps ...predicate.Document) *DocumentUpdateOne {
+	duo.mutation.Where(ps...)
+	return duo
+}
+
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
 func (duo *DocumentUpdateOne) Select(field string, fields ...string) *DocumentUpdateOne {
@@ -553,47 +367,8 @@ func (duo *DocumentUpdateOne) Select(field string, fields ...string) *DocumentUp
 
 // Save executes the query and returns the updated Document entity.
 func (duo *DocumentUpdateOne) Save(ctx context.Context) (*Document, error) {
-	var (
-		err  error
-		node *Document
-	)
 	duo.defaults()
-	if len(duo.hooks) == 0 {
-		if err = duo.check(); err != nil {
-			return nil, err
-		}
-		node, err = duo.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*DocumentMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = duo.check(); err != nil {
-				return nil, err
-			}
-			duo.mutation = mutation
-			node, err = duo.sqlSave(ctx)
-			mutation.done = true
-			return node, err
-		})
-		for i := len(duo.hooks) - 1; i >= 0; i-- {
-			if duo.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = duo.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, duo.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*Document)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from DocumentMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, duo.sqlSave, duo.mutation, duo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -645,16 +420,10 @@ func (duo *DocumentUpdateOne) check() error {
 }
 
 func (duo *DocumentUpdateOne) sqlSave(ctx context.Context) (_node *Document, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   document.Table,
-			Columns: document.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: document.FieldID,
-			},
-		},
+	if err := duo.check(); err != nil {
+		return _node, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(document.Table, document.Columns, sqlgraph.NewFieldSpec(document.FieldID, field.TypeUUID))
 	id, ok := duo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Document.id" for update`)}
@@ -680,25 +449,13 @@ func (duo *DocumentUpdateOne) sqlSave(ctx context.Context) (_node *Document, err
 		}
 	}
 	if value, ok := duo.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: document.FieldUpdatedAt,
-		})
+		_spec.SetField(document.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := duo.mutation.Title(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: document.FieldTitle,
-		})
+		_spec.SetField(document.FieldTitle, field.TypeString, value)
 	}
 	if value, ok := duo.mutation.Path(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: document.FieldPath,
-		})
+		_spec.SetField(document.FieldPath, field.TypeString, value)
 	}
 	if duo.mutation.GroupCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -708,10 +465,7 @@ func (duo *DocumentUpdateOne) sqlSave(ctx context.Context) (_node *Document, err
 			Columns: []string{document.GroupColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -724,64 +478,7 @@ func (duo *DocumentUpdateOne) sqlSave(ctx context.Context) (_node *Document, err
 			Columns: []string{document.GroupColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if duo.mutation.DocumentTokensCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   document.DocumentTokensTable,
-			Columns: []string{document.DocumentTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: documenttoken.FieldID,
-				},
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := duo.mutation.RemovedDocumentTokensIDs(); len(nodes) > 0 && !duo.mutation.DocumentTokensCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   document.DocumentTokensTable,
-			Columns: []string{document.DocumentTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: documenttoken.FieldID,
-				},
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := duo.mutation.DocumentTokensIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   document.DocumentTokensTable,
-			Columns: []string{document.DocumentTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: documenttoken.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -797,10 +494,7 @@ func (duo *DocumentUpdateOne) sqlSave(ctx context.Context) (_node *Document, err
 			Columns: []string{document.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -813,10 +507,7 @@ func (duo *DocumentUpdateOne) sqlSave(ctx context.Context) (_node *Document, err
 			Columns: []string{document.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -832,10 +523,7 @@ func (duo *DocumentUpdateOne) sqlSave(ctx context.Context) (_node *Document, err
 			Columns: []string{document.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -854,5 +542,6 @@ func (duo *DocumentUpdateOne) sqlSave(ctx context.Context) (_node *Document, err
 		}
 		return nil, err
 	}
+	duo.mutation.done = true
 	return _node, nil
 }

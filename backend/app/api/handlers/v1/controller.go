@@ -1,12 +1,35 @@
 package v1
 
 import (
+	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/hay-kot/homebox/backend/internal/core/services"
+	"github.com/hay-kot/homebox/backend/internal/core/services/reporting/eventbus"
 	"github.com/hay-kot/homebox/backend/internal/data/repo"
-	"github.com/hay-kot/homebox/backend/pkgs/server"
+	"github.com/hay-kot/httpkit/errchain"
+	"github.com/hay-kot/httpkit/server"
+	"github.com/rs/zerolog/log"
+
+	"github.com/olahol/melody"
 )
+
+type Results[T any] struct {
+	Items []T `json:"items"`
+}
+
+func WrapResults[T any](items []T) Results[T] {
+	return Results[T]{Items: items}
+}
+
+type Wrapped struct {
+	Item interface{} `json:"item"`
+}
+
+func Wrap(v any) Wrapped {
+	return Wrapped{Item: v}
+}
 
 func WithMaxUploadSize(maxUploadSize int64) func(*V1Controller) {
 	return func(ctrl *V1Controller) {
@@ -26,12 +49,20 @@ func WithRegistration(allowRegistration bool) func(*V1Controller) {
 	}
 }
 
+func WithSecureCookies(secure bool) func(*V1Controller) {
+	return func(ctrl *V1Controller) {
+		ctrl.cookieSecure = secure
+	}
+}
+
 type V1Controller struct {
+	cookieSecure      bool
 	repo              *repo.AllRepos
 	svc               *services.AllServices
 	maxUploadSize     int64
 	isDemo            bool
 	allowRegistration bool
+	bus               *eventbus.EventBus
 }
 
 type (
@@ -44,12 +75,13 @@ type (
 	}
 
 	ApiSummary struct {
-		Healthy  bool     `json:"health"`
-		Versions []string `json:"versions"`
-		Title    string   `json:"title"`
-		Message  string   `json:"message"`
-		Build    Build    `json:"build"`
-		Demo     bool     `json:"demo"`
+		Healthy           bool     `json:"health"`
+		Versions          []string `json:"versions"`
+		Title             string   `json:"title"`
+		Message           string   `json:"message"`
+		Build             Build    `json:"build"`
+		Demo              bool     `json:"demo"`
+		AllowRegistration bool     `json:"allowRegistration"`
 	}
 )
 
@@ -59,11 +91,12 @@ func BaseUrlFunc(prefix string) func(s string) string {
 	}
 }
 
-func NewControllerV1(svc *services.AllServices, repos *repo.AllRepos, options ...func(*V1Controller)) *V1Controller {
+func NewControllerV1(svc *services.AllServices, repos *repo.AllRepos, bus *eventbus.EventBus, options ...func(*V1Controller)) *V1Controller {
 	ctrl := &V1Controller{
 		repo:              repos,
 		svc:               svc,
 		allowRegistration: true,
+		bus:               bus,
 	}
 
 	for _, opt := range options {
@@ -74,19 +107,60 @@ func NewControllerV1(svc *services.AllServices, repos *repo.AllRepos, options ..
 }
 
 // HandleBase godoc
-// @Summary Retrieves the basic information about the API
-// @Tags    Base
-// @Produce json
-// @Success 200 {object} ApiSummary
-// @Router  /v1/status [GET]
-func (ctrl *V1Controller) HandleBase(ready ReadyFunc, build Build) server.HandlerFunc {
+//
+//	@Summary Application Info
+//	@Tags    Base
+//	@Produce json
+//	@Success 200 {object} ApiSummary
+//	@Router  /v1/status [GET]
+func (ctrl *V1Controller) HandleBase(ready ReadyFunc, build Build) errchain.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) error {
-		return server.Respond(w, http.StatusOK, ApiSummary{
-			Healthy: ready(),
-			Title:   "Go API Template",
-			Message: "Welcome to the Go API Template Application!",
-			Build:   build,
-			Demo:    ctrl.isDemo,
+		return server.JSON(w, http.StatusOK, ApiSummary{
+			Healthy:           ready(),
+			Title:             "Homebox",
+			Message:           "Track, Manage, and Organize your Things",
+			Build:             build,
+			Demo:              ctrl.isDemo,
+			AllowRegistration: ctrl.allowRegistration,
 		})
+	}
+}
+
+func (ctrl *V1Controller) HandleCacheWS() errchain.HandlerFunc {
+	m := melody.New()
+
+	m.HandleConnect(func(s *melody.Session) {
+		auth := services.NewContext(s.Request.Context())
+		s.Set("gid", auth.GID)
+	})
+
+	factory := func(e string) func(data any) {
+		return func(data any) {
+			eventData, ok := data.(eventbus.GroupMutationEvent)
+			if !ok {
+				log.Log().Msgf("invalid event data: %v", data)
+				return
+			}
+
+			jsonStr := fmt.Sprintf(`{"event": "%s"}`, e)
+
+			_ = m.BroadcastFilter([]byte(jsonStr), func(s *melody.Session) bool {
+				groupIDStr, ok := s.Get("gid")
+				if !ok {
+					return false
+				}
+
+				GID := groupIDStr.(uuid.UUID)
+				return GID == eventData.GID
+			})
+		}
+	}
+
+	ctrl.bus.Subscribe(eventbus.EventLabelMutation, factory("label.mutation"))
+	ctrl.bus.Subscribe(eventbus.EventLocationMutation, factory("location.mutation"))
+	ctrl.bus.Subscribe(eventbus.EventItemMutation, factory("item.mutation"))
+
+	return func(w http.ResponseWriter, r *http.Request) error {
+		return m.HandleRequest(w, r)
 	}
 }

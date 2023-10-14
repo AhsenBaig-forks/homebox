@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/group"
@@ -30,16 +31,17 @@ type User struct {
 	Password string `json:"-"`
 	// IsSuperuser holds the value of the "is_superuser" field.
 	IsSuperuser bool `json:"is_superuser,omitempty"`
-	// Role holds the value of the "role" field.
-	Role user.Role `json:"role,omitempty"`
 	// Superuser holds the value of the "superuser" field.
 	Superuser bool `json:"superuser,omitempty"`
+	// Role holds the value of the "role" field.
+	Role user.Role `json:"role,omitempty"`
 	// ActivatedOn holds the value of the "activated_on" field.
 	ActivatedOn time.Time `json:"activated_on,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserQuery when eager-loading is set.
-	Edges       UserEdges `json:"edges"`
-	group_users *uuid.UUID
+	Edges        UserEdges `json:"edges"`
+	group_users  *uuid.UUID
+	selectValues sql.SelectValues
 }
 
 // UserEdges holds the relations/edges for other nodes in the graph.
@@ -48,9 +50,11 @@ type UserEdges struct {
 	Group *Group `json:"group,omitempty"`
 	// AuthTokens holds the value of the auth_tokens edge.
 	AuthTokens []*AuthTokens `json:"auth_tokens,omitempty"`
+	// Notifiers holds the value of the notifiers edge.
+	Notifiers []*Notifier `json:"notifiers,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // GroupOrErr returns the Group value or an error if the edge
@@ -75,6 +79,15 @@ func (e UserEdges) AuthTokensOrErr() ([]*AuthTokens, error) {
 	return nil, &NotLoadedError{edge: "auth_tokens"}
 }
 
+// NotifiersOrErr returns the Notifiers value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) NotifiersOrErr() ([]*Notifier, error) {
+	if e.loadedTypes[2] {
+		return e.Notifiers, nil
+	}
+	return nil, &NotLoadedError{edge: "notifiers"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -91,7 +104,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 		case user.ForeignKeys[0]: // group_users
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		default:
-			return nil, fmt.Errorf("unexpected column %q for type User", columns[i])
+			values[i] = new(sql.UnknownType)
 		}
 	}
 	return values, nil
@@ -147,17 +160,17 @@ func (u *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				u.IsSuperuser = value.Bool
 			}
-		case user.FieldRole:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field role", values[i])
-			} else if value.Valid {
-				u.Role = user.Role(value.String)
-			}
 		case user.FieldSuperuser:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field superuser", values[i])
 			} else if value.Valid {
 				u.Superuser = value.Bool
+			}
+		case user.FieldRole:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field role", values[i])
+			} else if value.Valid {
+				u.Role = user.Role(value.String)
 			}
 		case user.FieldActivatedOn:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -172,26 +185,39 @@ func (u *User) assignValues(columns []string, values []any) error {
 				u.group_users = new(uuid.UUID)
 				*u.group_users = *value.S.(*uuid.UUID)
 			}
+		default:
+			u.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
 }
 
+// Value returns the ent.Value that was dynamically selected and assigned to the User.
+// This includes values selected through modifiers, order, etc.
+func (u *User) Value(name string) (ent.Value, error) {
+	return u.selectValues.Get(name)
+}
+
 // QueryGroup queries the "group" edge of the User entity.
 func (u *User) QueryGroup() *GroupQuery {
-	return (&UserClient{config: u.config}).QueryGroup(u)
+	return NewUserClient(u.config).QueryGroup(u)
 }
 
 // QueryAuthTokens queries the "auth_tokens" edge of the User entity.
 func (u *User) QueryAuthTokens() *AuthTokensQuery {
-	return (&UserClient{config: u.config}).QueryAuthTokens(u)
+	return NewUserClient(u.config).QueryAuthTokens(u)
+}
+
+// QueryNotifiers queries the "notifiers" edge of the User entity.
+func (u *User) QueryNotifiers() *NotifierQuery {
+	return NewUserClient(u.config).QueryNotifiers(u)
 }
 
 // Update returns a builder for updating this User.
 // Note that you need to call User.Unwrap() before calling this method if this User
 // was returned from a transaction, and the transaction was committed or rolled back.
 func (u *User) Update() *UserUpdateOne {
-	return (&UserClient{config: u.config}).UpdateOne(u)
+	return NewUserClient(u.config).UpdateOne(u)
 }
 
 // Unwrap unwraps the User entity that was returned from a transaction after it was closed,
@@ -227,11 +253,11 @@ func (u *User) String() string {
 	builder.WriteString("is_superuser=")
 	builder.WriteString(fmt.Sprintf("%v", u.IsSuperuser))
 	builder.WriteString(", ")
-	builder.WriteString("role=")
-	builder.WriteString(fmt.Sprintf("%v", u.Role))
-	builder.WriteString(", ")
 	builder.WriteString("superuser=")
 	builder.WriteString(fmt.Sprintf("%v", u.Superuser))
+	builder.WriteString(", ")
+	builder.WriteString("role=")
+	builder.WriteString(fmt.Sprintf("%v", u.Role))
 	builder.WriteString(", ")
 	builder.WriteString("activated_on=")
 	builder.WriteString(u.ActivatedOn.Format(time.ANSIC))
@@ -241,9 +267,3 @@ func (u *User) String() string {
 
 // Users is a parsable slice of User.
 type Users []*User
-
-func (u Users) config(cfg config) {
-	for _i := range u {
-		u[_i].config = cfg
-	}
-}

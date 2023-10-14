@@ -1,5 +1,4 @@
 <script setup lang="ts">
-  import { watchPostEffect } from "vue";
   import { ItemSummary, LabelSummary, LocationOutCount } from "~~/lib/api/types/data-contracts";
   import { useLabelStore } from "~~/stores/labels";
   import { useLocationStore } from "~~/stores/locations";
@@ -9,50 +8,50 @@
   });
 
   useHead({
-    title: "Homebox | Home",
+    title: "Homebox | Items",
   });
 
   const searchLocked = ref(false);
+  const queryParamsInitialized = ref(false);
+  const initialSearch = ref(true);
 
   const api = useUserApi();
-  const loading = useMinLoader(2000);
-  const results = ref<ItemSummary[]>([]);
+  const loading = useMinLoader(500);
+  const items = ref<ItemSummary[]>([]);
+  const total = ref(0);
 
+  const page1 = useRouteQuery("page", 1);
+
+  const page = computed({
+    get: () => page1.value,
+    set: value => {
+      page1.value = value;
+    },
+  });
+
+  const pageSize = useRouteQuery("pageSize", 21);
   const query = useRouteQuery("q", "");
   const advanced = useRouteQuery("advanced", false);
   const includeArchived = useRouteQuery("archived", false);
+  const fieldSelector = useRouteQuery("fieldSelector", false);
 
-  async function search() {
-    if (searchLocked.value) {
-      return;
-    }
+  const totalPages = computed(() => Math.ceil(total.value / pageSize.value));
+  const hasNext = computed(() => page.value * pageSize.value < total.value);
+  const hasPrev = computed(() => page.value > 1);
 
-    loading.value = true;
+  function prev() {
+    page.value = Math.max(1, page.value - 1);
+  }
 
-    const locations = selectedLocations.value.map(l => l.id);
-    const labels = selectedLabels.value.map(l => l.id);
-
-    const { data, error } = await api.items.getAll({
-      q: query.value || "",
-      locations,
-      labels,
-      includeArchived: includeArchived.value,
-    });
-    if (error) {
-      loading.value = false;
-      return;
-    }
-
-    results.value = data.items;
-    loading.value = false;
+  function next() {
+    page.value = Math.min(Math.ceil(total.value / pageSize.value), page.value + 1);
   }
 
   const route = useRoute();
   const router = useRouter();
 
-  const queryParamsInitialized = ref(false);
-
   onMounted(async () => {
+    loading.value = true;
     // Wait until locations and labels are loaded
     let maxRetry = 10;
     while (!labels.value || !locations.value) {
@@ -75,13 +74,34 @@
     queryParamsInitialized.value = true;
     searchLocked.value = false;
 
+    const qFields = route.query.fields as string[];
+    if (qFields) {
+      fieldTuples.value = qFields.map(f => f.split("=") as [string, string]);
+
+      for (const t of fieldTuples.value) {
+        if (t[0] && t[1]) {
+          await fetchValues(t[0]);
+        }
+      }
+    }
+
     // trigger search if no changes
     if (!qLab && !qLoc) {
       search();
     }
+
+    loading.value = false;
+    window.scroll({
+      top: 0,
+      left: 0,
+      behavior: "smooth",
+    });
   });
 
   const locationsStore = useLocationStore();
+
+  const locationFlatTree = await useFlatLocations();
+
   const locations = computed(() => locationsStore.allLocations);
 
   const labelStore = useLabelStore();
@@ -90,79 +110,339 @@
   const selectedLocations = ref<LocationOutCount[]>([]);
   const selectedLabels = ref<LabelSummary[]>([]);
 
-  watchPostEffect(() => {
-    if (!queryParamsInitialized.value) {
-      return;
+  const locIDs = computed(() => selectedLocations.value.map(l => l.id));
+  const labIDs = computed(() => selectedLabels.value.map(l => l.id));
+
+  function parseAssetIDString(d: string) {
+    d = d.replace(/"/g, "").replace(/-/g, "");
+
+    const aidInt = parseInt(d);
+    if (isNaN(aidInt)) {
+      return [-1, false];
     }
 
-    const labelIds = selectedLabels.value.map(l => l.id);
-    router.push({
-      query: {
-        ...router.currentRoute.value.query,
-        lab: labelIds,
-      },
-    });
+    return [aidInt, true];
+  }
+
+  const byAssetId = computed(() => query.value?.startsWith("#") || false);
+  const parsedAssetId = computed(() => {
+    if (!byAssetId.value) {
+      return "";
+    } else {
+      const [aid, valid] = parseAssetIDString(query.value.replace("#", ""));
+      if (!valid) {
+        return "Invalid Asset ID";
+      } else {
+        return aid;
+      }
+    }
   });
 
-  watchPostEffect(() => {
-    if (!queryParamsInitialized.value) {
-      return;
+  const fieldTuples = ref<[string, string][]>([]);
+  const fieldValuesCache = ref<Record<string, string[]>>({});
+
+  const { data: allFields } = useAsyncData(async () => {
+    const { data, error } = await api.items.fields.getAll();
+
+    if (error) {
+      return [];
     }
 
-    const locIds = selectedLocations.value.map(l => l.id);
-    router.push({
-      query: {
-        ...router.currentRoute.value.query,
-        loc: locIds,
-      },
-    });
+    return data;
   });
 
-  watchEffect(() => {
-    if (!advanced.value) {
+  watch(fieldSelector, (newV, oldV) => {
+    if (newV === false && oldV === true) {
+      fieldTuples.value = [];
+    }
+  });
+
+  async function fetchValues(field: string): Promise<string[]> {
+    if (fieldValuesCache.value[field]) {
+      return fieldValuesCache.value[field];
+    }
+
+    const { data, error } = await api.items.fields.getAllValues(field);
+
+    if (error) {
+      return [];
+    }
+
+    fieldValuesCache.value[field] = data;
+
+    return data;
+  }
+
+  watch(advanced, (v, lv) => {
+    if (v === false && lv === true) {
       selectedLocations.value = [];
       selectedLabels.value = [];
+      fieldTuples.value = [];
+
+      console.log("advanced", advanced.value);
+
+      router.push({
+        query: {
+          advanced: route.query.advanced,
+          q: query.value,
+          page: page.value,
+          pageSize: pageSize.value,
+          includeArchived: includeArchived.value ? "true" : "false",
+        },
+      });
     }
   });
 
-  watchDebounced([selectedLocations, selectedLabels, query], search, { debounce: 250, maxWait: 1000 });
-  watch(includeArchived, search);
+  async function search() {
+    if (searchLocked.value) {
+      return;
+    }
+
+    loading.value = true;
+
+    const fields = [];
+
+    for (const t of fieldTuples.value) {
+      if (t[0] && t[1]) {
+        fields.push(`${t[0]}=${t[1]}`);
+      }
+    }
+
+    const toast = useNotifier();
+
+    const { data, error } = await api.items.getAll({
+      q: query.value || "",
+      locations: locIDs.value,
+      labels: labIDs.value,
+      includeArchived: includeArchived.value,
+      page: page.value,
+      pageSize: pageSize.value,
+      fields,
+    });
+
+    function resetItems() {
+      page.value = Math.max(1, page.value - 1);
+      loading.value = false;
+      total.value = 0;
+      items.value = [];
+    }
+
+    if (error) {
+      resetItems();
+      toast.error("Failed to search items");
+      return;
+    }
+
+    if (!data.items || data.items.length === 0) {
+      resetItems();
+      return;
+    }
+
+    total.value = data.total;
+    items.value = data.items;
+
+    loading.value = false;
+    initialSearch.value = false;
+  }
+
+  watchDebounced([page, pageSize, query, selectedLabels, selectedLocations], search, { debounce: 250, maxWait: 1000 });
+
+  async function submit() {
+    // Set URL Params
+    const fields = [];
+    for (const t of fieldTuples.value) {
+      if (t[0] && t[1]) {
+        fields.push(`${t[0]}=${t[1]}`);
+      }
+    }
+
+    // Push non-reactive query fields
+    await router.push({
+      query: {
+        // Reactive
+        advanced: "true",
+        archived: includeArchived.value ? "true" : "false",
+        fieldSelector: fieldSelector.value ? "true" : "false",
+        pageSize: pageSize.value,
+        page: page.value,
+        q: query.value,
+
+        // Non-reactive
+        loc: locIDs.value,
+        lab: labIDs.value,
+        fields,
+      },
+    });
+
+    // Reset Pagination
+    page.value = 1;
+
+    // Perform Search
+    await search();
+  }
+
+  async function reset() {
+    // Set URL Params
+    const fields = [];
+    for (const t of fieldTuples.value) {
+      if (t[0] && t[1]) {
+        fields.push(`${t[0]}=${t[1]}`);
+      }
+    }
+
+    await router.push({
+      query: {
+        archived: "false",
+        fieldSelector: "false",
+        pageSize: 10,
+        page: 1,
+        q: "",
+        loc: [],
+        lab: [],
+        fields,
+      },
+    });
+
+    await search();
+  }
 </script>
 
 <template>
   <BaseContainer class="mb-16">
-    <FormTextField v-model="query" placeholder="Search" />
-    <div class="flex mt-1">
-      <label class="ml-auto label cursor-pointer">
-        <input v-model="advanced" type="checkbox" class="toggle toggle-primary" />
-        <span class="label-text text-neutral-content ml-2"> Filters </span>
-      </label>
-    </div>
-    <BaseCard v-if="advanced" class="my-1 overflow-visible">
-      <template #title> Filters </template>
-      <template #subtitle>
-        Location and label filters use the 'OR' operation. If more than one is selected only one will be required for a
-        match
-      </template>
-      <div class="px-4 pb-4">
-        <FormMultiselect v-model="selectedLabels" label="Labels" :items="labels ?? []" />
-        <FormMultiselect v-model="selectedLocations" label="Locations" :items="locations ?? []" />
-        <div class="flex pb-2 pt-5">
-          <label class="label cursor-pointer mr-auto">
-            <input v-model="includeArchived" type="checkbox" class="toggle toggle-primary" />
-            <span class="label-text ml-4"> Include Archived Items </span>
-          </label>
-          <Spacer />
+    <div v-if="locations && labels">
+      <div class="flex flex-wrap md:flex-nowrap gap-4 items-end">
+        <div class="w-full">
+          <FormTextField v-model="query" placeholder="Search" />
+          <div v-if="byAssetId" class="text-sm pl-2 pt-2">
+            <p>Querying Asset ID Number: {{ parsedAssetId }}</p>
+          </div>
+        </div>
+        <BaseButton class="btn-block md:w-auto" @click.prevent="submit">
+          <template #icon>
+            <Icon v-if="loading" name="mdi-loading" class="animate-spin" />
+            <Icon v-else name="mdi-search" />
+          </template>
+          Search
+        </BaseButton>
+      </div>
+
+      <div class="flex flex-wrap md:flex-nowrap gap-2 w-full py-2">
+        <SearchFilter v-model="selectedLocations" label="Locations" :options="locationFlatTree">
+          <template #display="{ item }">
+            <div>
+              <div class="flex w-full">
+                {{ item.name }}
+              </div>
+              <div v-if="item.name != item.treeString" class="text-xs mt-1">
+                {{ item.treeString }}
+              </div>
+            </div>
+          </template>
+        </SearchFilter>
+        <SearchFilter v-model="selectedLabels" label="Labels" :options="labels" />
+        <div class="dropdown">
+          <label tabindex="0" class="btn btn-xs">Options</label>
+          <div
+            tabindex="0"
+            class="dropdown-content mt-1 max-h-72 p-4 w-64 overflow-auto shadow bg-base-100 rounded-md -translate-x-24"
+          >
+            <label class="label cursor-pointer mr-auto">
+              <input v-model="includeArchived" type="checkbox" class="toggle toggle-sm toggle-primary" />
+              <span class="label-text ml-4"> Include Archived Items </span>
+            </label>
+            <label class="label cursor-pointer mr-auto">
+              <input v-model="fieldSelector" type="checkbox" class="toggle toggle-sm toggle-primary" />
+              <span class="label-text ml-4"> Field Selector </span>
+            </label>
+            <hr class="my-2" />
+            <BaseButton class="btn-block btn-sm" @click="reset"> Reset Search</BaseButton>
+          </div>
+        </div>
+        <div class="dropdown ml-auto dropdown-end">
+          <label tabindex="0" class="btn btn-xs">Tips</label>
+          <div
+            tabindex="0"
+            class="dropdown-content mt-1 p-4 w-[325px] text-sm overflow-auto shadow bg-base-100 rounded-md"
+          >
+            <p class="text-base">Search Tips</p>
+            <ul class="mt-1 list-disc pl-6">
+              <li>
+                Location and label filters use the 'OR' operation. If more than one is selected only one will be
+                required for a match.
+              </li>
+              <li>Searches prefixed with '#'' will query for a asset ID (example '#000-001')</li>
+              <li>
+                Field filters use the 'OR' operation. If more than one is selected only one will be required for a
+                match.
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
-    </BaseCard>
+      <div v-if="fieldSelector" class="py-4 space-y-2">
+        <p>Custom Fields</p>
+        <div v-for="(f, idx) in fieldTuples" :key="idx" class="flex flex-wrap gap-2">
+          <div class="form-control w-full max-w-xs">
+            <label class="label">
+              <span class="label-text">Field</span>
+            </label>
+            <select
+              v-model="fieldTuples[idx][0]"
+              class="select-bordered select"
+              :items="allFields ?? []"
+              @change="fetchValues(f[0])"
+            >
+              <option v-for="(fv, _, i) in allFields" :key="i" :value="fv">{{ fv }}</option>
+            </select>
+          </div>
+          <div class="form-control w-full max-w-xs">
+            <label class="label">
+              <span class="label-text">Field Value</span>
+            </label>
+            <select v-model="fieldTuples[idx][1]" class="select-bordered select" :items="fieldValuesCache[f[0]]">
+              <option v-for="v in fieldValuesCache[f[0]]" :key="v" :value="v">{{ v }}</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            class="btn btn-square btn-sm md:ml-0 ml-auto mt-auto mb-2"
+            @click="fieldTuples.splice(idx, 1)"
+          >
+            <Icon name="mdi-trash" class="w-5 h-5" />
+          </button>
+        </div>
+        <BaseButton type="button" class="btn-sm mt-2" @click="() => fieldTuples.push(['', ''])"> Add</BaseButton>
+      </div>
+    </div>
+
     <section class="mt-10">
-      <BaseSectionHeader class="mb-5"> Items </BaseSectionHeader>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <TransitionGroup name="list">
-          <ItemCard v-for="item in results" :key="item.id" :item="item" />
-        </TransitionGroup>
+      <BaseSectionHeader ref="itemsTitle"> Items </BaseSectionHeader>
+      <p class="text-base font-medium flex items-center">
+        {{ total }} Results
+        <span class="text-base ml-auto"> Page {{ page }} of {{ totalPages }}</span>
+      </p>
+
+      <div ref="cardgrid" class="grid mt-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <ItemCard v-for="item in items" :key="item.id" :item="item" />
+
         <div class="hidden first:inline text-xl">No Items Found</div>
+      </div>
+      <div v-if="items.length > 0 && (hasNext || hasPrev)" class="mt-10 flex gap-2 flex-col items-center">
+        <div class="flex">
+          <div class="btn-group">
+            <button :disabled="!hasPrev" class="btn text-no-transform" @click="prev">
+              <Icon class="mr-1 h-6 w-6" name="mdi-chevron-left" />
+              Prev
+            </button>
+            <button v-if="hasPrev" class="btn text-no-transform" @click="page = 1">First</button>
+            <button v-if="hasNext" class="btn text-no-transform" @click="page = totalPages">Last</button>
+            <button :disabled="!hasNext" class="btn text-no-transform" @click="next">
+              Next
+              <Icon class="ml-1 h-6 w-6" name="mdi-chevron-right" />
+            </button>
+          </div>
+        </div>
+        <p class="text-sm font-bold">Page {{ page }} of {{ totalPages }}</p>
       </div>
     </section>
   </BaseContainer>

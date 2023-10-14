@@ -4,11 +4,12 @@ import (
 	"time"
 
 	"github.com/hay-kot/homebox/backend/internal/core/services"
+	"github.com/hay-kot/homebox/backend/internal/core/services/reporting/eventbus"
 	"github.com/hay-kot/homebox/backend/internal/data/ent"
 	"github.com/hay-kot/homebox/backend/internal/data/repo"
 	"github.com/hay-kot/homebox/backend/internal/sys/config"
 	"github.com/hay-kot/homebox/backend/pkgs/mailer"
-	"github.com/hay-kot/homebox/backend/pkgs/server"
+	"github.com/hay-kot/httpkit/server"
 )
 
 type app struct {
@@ -18,6 +19,7 @@ type app struct {
 	server   *server.Server
 	repos    *repo.AllRepos
 	services *services.AllServices
+	bus      *eventbus.EventBus
 }
 
 func new(conf *config.Config) *app {
@@ -37,8 +39,11 @@ func new(conf *config.Config) *app {
 }
 
 func (a *app) startBgTask(t time.Duration, fn func()) {
+	timer := time.NewTimer(t)
+
 	for {
+		timer.Reset(t)
 		a.server.Background(fn)
-		time.Sleep(t)
+		<-timer.C
 	}
 }

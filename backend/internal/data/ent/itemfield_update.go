@@ -175,41 +175,8 @@ func (ifu *ItemFieldUpdate) ClearItem() *ItemFieldUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (ifu *ItemFieldUpdate) Save(ctx context.Context) (int, error) {
-	var (
-		err      error
-		affected int
-	)
 	ifu.defaults()
-	if len(ifu.hooks) == 0 {
-		if err = ifu.check(); err != nil {
-			return 0, err
-		}
-		affected, err = ifu.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*ItemFieldMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = ifu.check(); err != nil {
-				return 0, err
-			}
-			ifu.mutation = mutation
-			affected, err = ifu.sqlSave(ctx)
-			mutation.done = true
-			return affected, err
-		})
-		for i := len(ifu.hooks) - 1; i >= 0; i-- {
-			if ifu.hooks[i] == nil {
-				return 0, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = ifu.hooks[i](mut)
-		}
-		if _, err := mut.Mutate(ctx, ifu.mutation); err != nil {
-			return 0, err
-		}
-	}
-	return affected, err
+	return withHooks(ctx, ifu.sqlSave, ifu.mutation, ifu.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -268,16 +235,10 @@ func (ifu *ItemFieldUpdate) check() error {
 }
 
 func (ifu *ItemFieldUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   itemfield.Table,
-			Columns: itemfield.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: itemfield.FieldID,
-			},
-		},
+	if err := ifu.check(); err != nil {
+		return n, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(itemfield.Table, itemfield.Columns, sqlgraph.NewFieldSpec(itemfield.FieldID, field.TypeUUID))
 	if ps := ifu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -286,85 +247,40 @@ func (ifu *ItemFieldUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 	}
 	if value, ok := ifu.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: itemfield.FieldUpdatedAt,
-		})
+		_spec.SetField(itemfield.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := ifu.mutation.Name(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: itemfield.FieldName,
-		})
+		_spec.SetField(itemfield.FieldName, field.TypeString, value)
 	}
 	if value, ok := ifu.mutation.Description(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: itemfield.FieldDescription,
-		})
+		_spec.SetField(itemfield.FieldDescription, field.TypeString, value)
 	}
 	if ifu.mutation.DescriptionCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: itemfield.FieldDescription,
-		})
+		_spec.ClearField(itemfield.FieldDescription, field.TypeString)
 	}
 	if value, ok := ifu.mutation.GetType(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeEnum,
-			Value:  value,
-			Column: itemfield.FieldType,
-		})
+		_spec.SetField(itemfield.FieldType, field.TypeEnum, value)
 	}
 	if value, ok := ifu.mutation.TextValue(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: itemfield.FieldTextValue,
-		})
+		_spec.SetField(itemfield.FieldTextValue, field.TypeString, value)
 	}
 	if ifu.mutation.TextValueCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: itemfield.FieldTextValue,
-		})
+		_spec.ClearField(itemfield.FieldTextValue, field.TypeString)
 	}
 	if value, ok := ifu.mutation.NumberValue(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: itemfield.FieldNumberValue,
-		})
+		_spec.SetField(itemfield.FieldNumberValue, field.TypeInt, value)
 	}
 	if value, ok := ifu.mutation.AddedNumberValue(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: itemfield.FieldNumberValue,
-		})
+		_spec.AddField(itemfield.FieldNumberValue, field.TypeInt, value)
 	}
 	if ifu.mutation.NumberValueCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Column: itemfield.FieldNumberValue,
-		})
+		_spec.ClearField(itemfield.FieldNumberValue, field.TypeInt)
 	}
 	if value, ok := ifu.mutation.BooleanValue(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBool,
-			Value:  value,
-			Column: itemfield.FieldBooleanValue,
-		})
+		_spec.SetField(itemfield.FieldBooleanValue, field.TypeBool, value)
 	}
 	if value, ok := ifu.mutation.TimeValue(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: itemfield.FieldTimeValue,
-		})
+		_spec.SetField(itemfield.FieldTimeValue, field.TypeTime, value)
 	}
 	if ifu.mutation.ItemCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -374,10 +290,7 @@ func (ifu *ItemFieldUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{itemfield.ItemColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -390,10 +303,7 @@ func (ifu *ItemFieldUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{itemfield.ItemColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -409,6 +319,7 @@ func (ifu *ItemFieldUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
+	ifu.mutation.done = true
 	return n, nil
 }
 
@@ -563,6 +474,12 @@ func (ifuo *ItemFieldUpdateOne) ClearItem() *ItemFieldUpdateOne {
 	return ifuo
 }
 
+// Where appends a list predicates to the ItemFieldUpdate builder.
+func (ifuo *ItemFieldUpdateOne) Where(ps ...predicate.ItemField) *ItemFieldUpdateOne {
+	ifuo.mutation.Where(ps...)
+	return ifuo
+}
+
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
 func (ifuo *ItemFieldUpdateOne) Select(field string, fields ...string) *ItemFieldUpdateOne {
@@ -572,47 +489,8 @@ func (ifuo *ItemFieldUpdateOne) Select(field string, fields ...string) *ItemFiel
 
 // Save executes the query and returns the updated ItemField entity.
 func (ifuo *ItemFieldUpdateOne) Save(ctx context.Context) (*ItemField, error) {
-	var (
-		err  error
-		node *ItemField
-	)
 	ifuo.defaults()
-	if len(ifuo.hooks) == 0 {
-		if err = ifuo.check(); err != nil {
-			return nil, err
-		}
-		node, err = ifuo.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*ItemFieldMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = ifuo.check(); err != nil {
-				return nil, err
-			}
-			ifuo.mutation = mutation
-			node, err = ifuo.sqlSave(ctx)
-			mutation.done = true
-			return node, err
-		})
-		for i := len(ifuo.hooks) - 1; i >= 0; i-- {
-			if ifuo.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = ifuo.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, ifuo.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*ItemField)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from ItemFieldMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, ifuo.sqlSave, ifuo.mutation, ifuo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -671,16 +549,10 @@ func (ifuo *ItemFieldUpdateOne) check() error {
 }
 
 func (ifuo *ItemFieldUpdateOne) sqlSave(ctx context.Context) (_node *ItemField, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   itemfield.Table,
-			Columns: itemfield.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: itemfield.FieldID,
-			},
-		},
+	if err := ifuo.check(); err != nil {
+		return _node, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(itemfield.Table, itemfield.Columns, sqlgraph.NewFieldSpec(itemfield.FieldID, field.TypeUUID))
 	id, ok := ifuo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "ItemField.id" for update`)}
@@ -706,85 +578,40 @@ func (ifuo *ItemFieldUpdateOne) sqlSave(ctx context.Context) (_node *ItemField, 
 		}
 	}
 	if value, ok := ifuo.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: itemfield.FieldUpdatedAt,
-		})
+		_spec.SetField(itemfield.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := ifuo.mutation.Name(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: itemfield.FieldName,
-		})
+		_spec.SetField(itemfield.FieldName, field.TypeString, value)
 	}
 	if value, ok := ifuo.mutation.Description(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: itemfield.FieldDescription,
-		})
+		_spec.SetField(itemfield.FieldDescription, field.TypeString, value)
 	}
 	if ifuo.mutation.DescriptionCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: itemfield.FieldDescription,
-		})
+		_spec.ClearField(itemfield.FieldDescription, field.TypeString)
 	}
 	if value, ok := ifuo.mutation.GetType(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeEnum,
-			Value:  value,
-			Column: itemfield.FieldType,
-		})
+		_spec.SetField(itemfield.FieldType, field.TypeEnum, value)
 	}
 	if value, ok := ifuo.mutation.TextValue(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: itemfield.FieldTextValue,
-		})
+		_spec.SetField(itemfield.FieldTextValue, field.TypeString, value)
 	}
 	if ifuo.mutation.TextValueCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: itemfield.FieldTextValue,
-		})
+		_spec.ClearField(itemfield.FieldTextValue, field.TypeString)
 	}
 	if value, ok := ifuo.mutation.NumberValue(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: itemfield.FieldNumberValue,
-		})
+		_spec.SetField(itemfield.FieldNumberValue, field.TypeInt, value)
 	}
 	if value, ok := ifuo.mutation.AddedNumberValue(); ok {
-		_spec.Fields.Add = append(_spec.Fields.Add, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: itemfield.FieldNumberValue,
-		})
+		_spec.AddField(itemfield.FieldNumberValue, field.TypeInt, value)
 	}
 	if ifuo.mutation.NumberValueCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Column: itemfield.FieldNumberValue,
-		})
+		_spec.ClearField(itemfield.FieldNumberValue, field.TypeInt)
 	}
 	if value, ok := ifuo.mutation.BooleanValue(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeBool,
-			Value:  value,
-			Column: itemfield.FieldBooleanValue,
-		})
+		_spec.SetField(itemfield.FieldBooleanValue, field.TypeBool, value)
 	}
 	if value, ok := ifuo.mutation.TimeValue(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: itemfield.FieldTimeValue,
-		})
+		_spec.SetField(itemfield.FieldTimeValue, field.TypeTime, value)
 	}
 	if ifuo.mutation.ItemCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -794,10 +621,7 @@ func (ifuo *ItemFieldUpdateOne) sqlSave(ctx context.Context) (_node *ItemField, 
 			Columns: []string{itemfield.ItemColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -810,10 +634,7 @@ func (ifuo *ItemFieldUpdateOne) sqlSave(ctx context.Context) (_node *ItemField, 
 			Columns: []string{itemfield.ItemColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -832,5 +653,6 @@ func (ifuo *ItemFieldUpdateOne) sqlSave(ctx context.Context) (_node *ItemField, 
 		}
 		return nil, err
 	}
+	ifuo.mutation.done = true
 	return _node, nil
 }

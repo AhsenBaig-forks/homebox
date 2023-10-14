@@ -4,10 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	"github.com/ardanlabs/conf/v2"
-
 	"os"
+
+	"github.com/ardanlabs/conf/v3"
 )
 
 const (
@@ -16,25 +15,24 @@ const (
 )
 
 type Config struct {
-	Mode              string      `yaml:"mode" conf:"default:development"` // development or production
-	Web               WebConfig   `yaml:"web"`
-	Storage           Storage     `yaml:"storage"`
-	Log               LoggerConf  `yaml:"logger"`
-	Mailer            MailerConf  `yaml:"mailer"`
-	Swagger           SwaggerConf `yaml:"swagger"`
-	Demo              bool        `yaml:"demo"`
-	AllowRegistration bool        `yaml:"disable_registration" conf:"default:true"`
-	Debug             DebugConf   `yaml:"debug"`
+	Mode    string     `yaml:"mode" conf:"default:development"` // development or production
+	Web     WebConfig  `yaml:"web"`
+	Storage Storage    `yaml:"storage"`
+	Log     LoggerConf `yaml:"logger"`
+	Mailer  MailerConf `yaml:"mailer"`
+	Demo    bool       `yaml:"demo"`
+	Debug   DebugConf  `yaml:"debug"`
+	Options Options    `yaml:"options"`
+}
+
+type Options struct {
+	AllowRegistration    bool `yaml:"disable_registration" conf:"default:true"`
+	AutoIncrementAssetID bool `yaml:"auto_increment_asset_id" conf:"default:true"`
 }
 
 type DebugConf struct {
 	Enabled bool   `yaml:"enabled" conf:"default:false"`
 	Port    string `yaml:"port" conf:"default:4000"`
-}
-
-type SwaggerConf struct {
-	Host   string `yaml:"host" conf:"default:localhost:7745"`
-	Scheme string `yaml:"scheme" conf:"default:http"`
 }
 
 type WebConfig struct {
@@ -50,7 +48,6 @@ func New() (*Config, error) {
 	const prefix = "HBOX"
 
 	help, err := conf.Parse(prefix, &cfg)
-
 	if err != nil {
 		if errors.Is(err, conf.ErrHelpWanted) {
 			fmt.Println(help)
@@ -66,11 +63,9 @@ func New() (*Config, error) {
 // This is useful for debugging. If the marshaller errors out, it will panic.
 func (c *Config) Print() {
 	res, err := json.MarshalIndent(c, "", "  ")
-
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Println(string(res))
-
 }

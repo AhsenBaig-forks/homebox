@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/attachment"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/document"
-	"github.com/hay-kot/homebox/backend/internal/data/ent/documenttoken"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/group"
 )
 
@@ -89,21 +88,6 @@ func (dc *DocumentCreate) SetGroup(g *Group) *DocumentCreate {
 	return dc.SetGroupID(g.ID)
 }
 
-// AddDocumentTokenIDs adds the "document_tokens" edge to the DocumentToken entity by IDs.
-func (dc *DocumentCreate) AddDocumentTokenIDs(ids ...uuid.UUID) *DocumentCreate {
-	dc.mutation.AddDocumentTokenIDs(ids...)
-	return dc
-}
-
-// AddDocumentTokens adds the "document_tokens" edges to the DocumentToken entity.
-func (dc *DocumentCreate) AddDocumentTokens(d ...*DocumentToken) *DocumentCreate {
-	ids := make([]uuid.UUID, len(d))
-	for i := range d {
-		ids[i] = d[i].ID
-	}
-	return dc.AddDocumentTokenIDs(ids...)
-}
-
 // AddAttachmentIDs adds the "attachments" edge to the Attachment entity by IDs.
 func (dc *DocumentCreate) AddAttachmentIDs(ids ...uuid.UUID) *DocumentCreate {
 	dc.mutation.AddAttachmentIDs(ids...)
@@ -126,50 +110,8 @@ func (dc *DocumentCreate) Mutation() *DocumentMutation {
 
 // Save creates the Document in the database.
 func (dc *DocumentCreate) Save(ctx context.Context) (*Document, error) {
-	var (
-		err  error
-		node *Document
-	)
 	dc.defaults()
-	if len(dc.hooks) == 0 {
-		if err = dc.check(); err != nil {
-			return nil, err
-		}
-		node, err = dc.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*DocumentMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = dc.check(); err != nil {
-				return nil, err
-			}
-			dc.mutation = mutation
-			if node, err = dc.sqlSave(ctx); err != nil {
-				return nil, err
-			}
-			mutation.id = &node.ID
-			mutation.done = true
-			return node, err
-		})
-		for i := len(dc.hooks) - 1; i >= 0; i-- {
-			if dc.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = dc.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, dc.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*Document)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from DocumentMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, dc.sqlSave, dc.mutation, dc.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
@@ -241,6 +183,9 @@ func (dc *DocumentCreate) check() error {
 }
 
 func (dc *DocumentCreate) sqlSave(ctx context.Context) (*Document, error) {
+	if err := dc.check(); err != nil {
+		return nil, err
+	}
 	_node, _spec := dc.createSpec()
 	if err := sqlgraph.CreateNode(ctx, dc.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
@@ -255,54 +200,34 @@ func (dc *DocumentCreate) sqlSave(ctx context.Context) (*Document, error) {
 			return nil, err
 		}
 	}
+	dc.mutation.id = &_node.ID
+	dc.mutation.done = true
 	return _node, nil
 }
 
 func (dc *DocumentCreate) createSpec() (*Document, *sqlgraph.CreateSpec) {
 	var (
 		_node = &Document{config: dc.config}
-		_spec = &sqlgraph.CreateSpec{
-			Table: document.Table,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: document.FieldID,
-			},
-		}
+		_spec = sqlgraph.NewCreateSpec(document.Table, sqlgraph.NewFieldSpec(document.FieldID, field.TypeUUID))
 	)
 	if id, ok := dc.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = &id
 	}
 	if value, ok := dc.mutation.CreatedAt(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: document.FieldCreatedAt,
-		})
+		_spec.SetField(document.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
 	if value, ok := dc.mutation.UpdatedAt(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: document.FieldUpdatedAt,
-		})
+		_spec.SetField(document.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
 	if value, ok := dc.mutation.Title(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: document.FieldTitle,
-		})
+		_spec.SetField(document.FieldTitle, field.TypeString, value)
 		_node.Title = value
 	}
 	if value, ok := dc.mutation.Path(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: document.FieldPath,
-		})
+		_spec.SetField(document.FieldPath, field.TypeString, value)
 		_node.Path = value
 	}
 	if nodes := dc.mutation.GroupIDs(); len(nodes) > 0 {
@@ -313,35 +238,13 @@ func (dc *DocumentCreate) createSpec() (*Document, *sqlgraph.CreateSpec) {
 			Columns: []string{document.GroupColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.group_documents = &nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := dc.mutation.DocumentTokensIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   document.DocumentTokensTable,
-			Columns: []string{document.DocumentTokensColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: documenttoken.FieldID,
-				},
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := dc.mutation.AttachmentsIDs(); len(nodes) > 0 {
@@ -352,10 +255,7 @@ func (dc *DocumentCreate) createSpec() (*Document, *sqlgraph.CreateSpec) {
 			Columns: []string{document.AttachmentsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: attachment.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -390,8 +290,8 @@ func (dcb *DocumentCreateBulk) Save(ctx context.Context) ([]*Document, error) {
 					return nil, err
 				}
 				builder.mutation = mutation
-				nodes[i], specs[i] = builder.createSpec()
 				var err error
+				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
 					_, err = mutators[i+1].Mutate(root, dcb.builders[i+1].mutation)
 				} else {

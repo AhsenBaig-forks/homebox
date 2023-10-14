@@ -51,6 +51,20 @@ func (au *AttachmentUpdate) SetNillableType(a *attachment.Type) *AttachmentUpdat
 	return au
 }
 
+// SetPrimary sets the "primary" field.
+func (au *AttachmentUpdate) SetPrimary(b bool) *AttachmentUpdate {
+	au.mutation.SetPrimary(b)
+	return au
+}
+
+// SetNillablePrimary sets the "primary" field if the given value is not nil.
+func (au *AttachmentUpdate) SetNillablePrimary(b *bool) *AttachmentUpdate {
+	if b != nil {
+		au.SetPrimary(*b)
+	}
+	return au
+}
+
 // SetItemID sets the "item" edge to the Item entity by ID.
 func (au *AttachmentUpdate) SetItemID(id uuid.UUID) *AttachmentUpdate {
 	au.mutation.SetItemID(id)
@@ -92,41 +106,8 @@ func (au *AttachmentUpdate) ClearDocument() *AttachmentUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (au *AttachmentUpdate) Save(ctx context.Context) (int, error) {
-	var (
-		err      error
-		affected int
-	)
 	au.defaults()
-	if len(au.hooks) == 0 {
-		if err = au.check(); err != nil {
-			return 0, err
-		}
-		affected, err = au.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*AttachmentMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = au.check(); err != nil {
-				return 0, err
-			}
-			au.mutation = mutation
-			affected, err = au.sqlSave(ctx)
-			mutation.done = true
-			return affected, err
-		})
-		for i := len(au.hooks) - 1; i >= 0; i-- {
-			if au.hooks[i] == nil {
-				return 0, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = au.hooks[i](mut)
-		}
-		if _, err := mut.Mutate(ctx, au.mutation); err != nil {
-			return 0, err
-		}
-	}
-	return affected, err
+	return withHooks(ctx, au.sqlSave, au.mutation, au.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -176,16 +157,10 @@ func (au *AttachmentUpdate) check() error {
 }
 
 func (au *AttachmentUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   attachment.Table,
-			Columns: attachment.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: attachment.FieldID,
-			},
-		},
+	if err := au.check(); err != nil {
+		return n, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(attachment.Table, attachment.Columns, sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID))
 	if ps := au.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -194,18 +169,13 @@ func (au *AttachmentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 	}
 	if value, ok := au.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: attachment.FieldUpdatedAt,
-		})
+		_spec.SetField(attachment.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := au.mutation.GetType(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeEnum,
-			Value:  value,
-			Column: attachment.FieldType,
-		})
+		_spec.SetField(attachment.FieldType, field.TypeEnum, value)
+	}
+	if value, ok := au.mutation.Primary(); ok {
+		_spec.SetField(attachment.FieldPrimary, field.TypeBool, value)
 	}
 	if au.mutation.ItemCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -215,10 +185,7 @@ func (au *AttachmentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{attachment.ItemColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -231,10 +198,7 @@ func (au *AttachmentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{attachment.ItemColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -250,10 +214,7 @@ func (au *AttachmentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{attachment.DocumentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: document.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(document.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -266,10 +227,7 @@ func (au *AttachmentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{attachment.DocumentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: document.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(document.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -285,6 +243,7 @@ func (au *AttachmentUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
+	au.mutation.done = true
 	return n, nil
 }
 
@@ -312,6 +271,20 @@ func (auo *AttachmentUpdateOne) SetType(a attachment.Type) *AttachmentUpdateOne 
 func (auo *AttachmentUpdateOne) SetNillableType(a *attachment.Type) *AttachmentUpdateOne {
 	if a != nil {
 		auo.SetType(*a)
+	}
+	return auo
+}
+
+// SetPrimary sets the "primary" field.
+func (auo *AttachmentUpdateOne) SetPrimary(b bool) *AttachmentUpdateOne {
+	auo.mutation.SetPrimary(b)
+	return auo
+}
+
+// SetNillablePrimary sets the "primary" field if the given value is not nil.
+func (auo *AttachmentUpdateOne) SetNillablePrimary(b *bool) *AttachmentUpdateOne {
+	if b != nil {
+		auo.SetPrimary(*b)
 	}
 	return auo
 }
@@ -355,6 +328,12 @@ func (auo *AttachmentUpdateOne) ClearDocument() *AttachmentUpdateOne {
 	return auo
 }
 
+// Where appends a list predicates to the AttachmentUpdate builder.
+func (auo *AttachmentUpdateOne) Where(ps ...predicate.Attachment) *AttachmentUpdateOne {
+	auo.mutation.Where(ps...)
+	return auo
+}
+
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
 func (auo *AttachmentUpdateOne) Select(field string, fields ...string) *AttachmentUpdateOne {
@@ -364,47 +343,8 @@ func (auo *AttachmentUpdateOne) Select(field string, fields ...string) *Attachme
 
 // Save executes the query and returns the updated Attachment entity.
 func (auo *AttachmentUpdateOne) Save(ctx context.Context) (*Attachment, error) {
-	var (
-		err  error
-		node *Attachment
-	)
 	auo.defaults()
-	if len(auo.hooks) == 0 {
-		if err = auo.check(); err != nil {
-			return nil, err
-		}
-		node, err = auo.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*AttachmentMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = auo.check(); err != nil {
-				return nil, err
-			}
-			auo.mutation = mutation
-			node, err = auo.sqlSave(ctx)
-			mutation.done = true
-			return node, err
-		})
-		for i := len(auo.hooks) - 1; i >= 0; i-- {
-			if auo.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = auo.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, auo.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*Attachment)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from AttachmentMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, auo.sqlSave, auo.mutation, auo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -454,16 +394,10 @@ func (auo *AttachmentUpdateOne) check() error {
 }
 
 func (auo *AttachmentUpdateOne) sqlSave(ctx context.Context) (_node *Attachment, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   attachment.Table,
-			Columns: attachment.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: attachment.FieldID,
-			},
-		},
+	if err := auo.check(); err != nil {
+		return _node, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(attachment.Table, attachment.Columns, sqlgraph.NewFieldSpec(attachment.FieldID, field.TypeUUID))
 	id, ok := auo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Attachment.id" for update`)}
@@ -489,18 +423,13 @@ func (auo *AttachmentUpdateOne) sqlSave(ctx context.Context) (_node *Attachment,
 		}
 	}
 	if value, ok := auo.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: attachment.FieldUpdatedAt,
-		})
+		_spec.SetField(attachment.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := auo.mutation.GetType(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeEnum,
-			Value:  value,
-			Column: attachment.FieldType,
-		})
+		_spec.SetField(attachment.FieldType, field.TypeEnum, value)
+	}
+	if value, ok := auo.mutation.Primary(); ok {
+		_spec.SetField(attachment.FieldPrimary, field.TypeBool, value)
 	}
 	if auo.mutation.ItemCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -510,10 +439,7 @@ func (auo *AttachmentUpdateOne) sqlSave(ctx context.Context) (_node *Attachment,
 			Columns: []string{attachment.ItemColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -526,10 +452,7 @@ func (auo *AttachmentUpdateOne) sqlSave(ctx context.Context) (_node *Attachment,
 			Columns: []string{attachment.ItemColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -545,10 +468,7 @@ func (auo *AttachmentUpdateOne) sqlSave(ctx context.Context) (_node *Attachment,
 			Columns: []string{attachment.DocumentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: document.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(document.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -561,10 +481,7 @@ func (auo *AttachmentUpdateOne) sqlSave(ctx context.Context) (_node *Attachment,
 			Columns: []string{attachment.DocumentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: document.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(document.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -583,5 +500,6 @@ func (auo *AttachmentUpdateOne) sqlSave(ctx context.Context) (_node *Attachment,
 		}
 		return nil, err
 	}
+	auo.mutation.done = true
 	return _node, nil
 }

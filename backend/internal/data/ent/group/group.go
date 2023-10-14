@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/google/uuid"
 )
 
@@ -34,6 +36,8 @@ const (
 	EdgeDocuments = "documents"
 	// EdgeInvitationTokens holds the string denoting the invitation_tokens edge name in mutations.
 	EdgeInvitationTokens = "invitation_tokens"
+	// EdgeNotifiers holds the string denoting the notifiers edge name in mutations.
+	EdgeNotifiers = "notifiers"
 	// Table holds the table name of the group in the database.
 	Table = "groups"
 	// UsersTable is the table that holds the users relation/edge.
@@ -78,6 +82,13 @@ const (
 	InvitationTokensInverseTable = "group_invitation_tokens"
 	// InvitationTokensColumn is the table column denoting the invitation_tokens relation/edge.
 	InvitationTokensColumn = "group_invitation_tokens"
+	// NotifiersTable is the table that holds the notifiers relation/edge.
+	NotifiersTable = "notifiers"
+	// NotifiersInverseTable is the table name for the Notifier entity.
+	// It exists in this package in order to avoid circular dependency with the "notifier" package.
+	NotifiersInverseTable = "notifiers"
+	// NotifiersColumn is the table column denoting the notifiers relation/edge.
+	NotifiersColumn = "group_id"
 )
 
 // Columns holds all SQL columns for group fields.
@@ -120,15 +131,37 @@ const DefaultCurrency = CurrencyUsd
 
 // Currency values.
 const (
-	CurrencyUsd Currency = "usd"
+	CurrencyAed Currency = "aed"
+	CurrencyAud Currency = "aud"
+	CurrencyBgn Currency = "bgn"
+	CurrencyBrl Currency = "brl"
+	CurrencyCad Currency = "cad"
+	CurrencyChf Currency = "chf"
+	CurrencyCzk Currency = "czk"
+	CurrencyDkk Currency = "dkk"
 	CurrencyEur Currency = "eur"
 	CurrencyGbp Currency = "gbp"
+	CurrencyHkd Currency = "hkd"
+	CurrencyIdr Currency = "idr"
+	CurrencyInr Currency = "inr"
 	CurrencyJpy Currency = "jpy"
-	CurrencyZar Currency = "zar"
-	CurrencyAud Currency = "aud"
+	CurrencyKrw Currency = "krw"
+	CurrencyMxn Currency = "mxn"
 	CurrencyNok Currency = "nok"
+	CurrencyNzd Currency = "nzd"
+	CurrencyPln Currency = "pln"
+	CurrencyRmb Currency = "rmb"
+	CurrencyRon Currency = "ron"
+	CurrencyRub Currency = "rub"
+	CurrencySar Currency = "sar"
 	CurrencySek Currency = "sek"
-	CurrencyDkk Currency = "dkk"
+	CurrencySgd Currency = "sgd"
+	CurrencyThb Currency = "thb"
+	CurrencyTry Currency = "try"
+	CurrencyUsd Currency = "usd"
+	CurrencyXag Currency = "xag"
+	CurrencyXau Currency = "xau"
+	CurrencyZar Currency = "zar"
 )
 
 func (c Currency) String() string {
@@ -138,9 +171,184 @@ func (c Currency) String() string {
 // CurrencyValidator is a validator for the "currency" field enum values. It is called by the builders before save.
 func CurrencyValidator(c Currency) error {
 	switch c {
-	case CurrencyUsd, CurrencyEur, CurrencyGbp, CurrencyJpy, CurrencyZar, CurrencyAud, CurrencyNok, CurrencySek, CurrencyDkk:
+	case CurrencyAed, CurrencyAud, CurrencyBgn, CurrencyBrl, CurrencyCad, CurrencyChf, CurrencyCzk, CurrencyDkk, CurrencyEur, CurrencyGbp, CurrencyHkd, CurrencyIdr, CurrencyInr, CurrencyJpy, CurrencyKrw, CurrencyMxn, CurrencyNok, CurrencyNzd, CurrencyPln, CurrencyRmb, CurrencyRon, CurrencyRub, CurrencySar, CurrencySek, CurrencySgd, CurrencyThb, CurrencyTry, CurrencyUsd, CurrencyXag, CurrencyXau, CurrencyZar:
 		return nil
 	default:
 		return fmt.Errorf("group: invalid enum value for currency field: %q", c)
 	}
+}
+
+// OrderOption defines the ordering options for the Group queries.
+type OrderOption func(*sql.Selector)
+
+// ByID orders the results by the id field.
+func ByID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByCreatedAt orders the results by the created_at field.
+func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByUpdatedAt orders the results by the updated_at field.
+func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
+}
+
+// ByName orders the results by the name field.
+func ByName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByCurrency orders the results by the currency field.
+func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
+}
+
+// ByUsersCount orders the results by users count.
+func ByUsersCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newUsersStep(), opts...)
+	}
+}
+
+// ByUsers orders the results by users terms.
+func ByUsers(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newUsersStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByLocationsCount orders the results by locations count.
+func ByLocationsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newLocationsStep(), opts...)
+	}
+}
+
+// ByLocations orders the results by locations terms.
+func ByLocations(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newLocationsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByItemsCount orders the results by items count.
+func ByItemsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newItemsStep(), opts...)
+	}
+}
+
+// ByItems orders the results by items terms.
+func ByItems(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newItemsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByLabelsCount orders the results by labels count.
+func ByLabelsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newLabelsStep(), opts...)
+	}
+}
+
+// ByLabels orders the results by labels terms.
+func ByLabels(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newLabelsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByDocumentsCount orders the results by documents count.
+func ByDocumentsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newDocumentsStep(), opts...)
+	}
+}
+
+// ByDocuments orders the results by documents terms.
+func ByDocuments(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newDocumentsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByInvitationTokensCount orders the results by invitation_tokens count.
+func ByInvitationTokensCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newInvitationTokensStep(), opts...)
+	}
+}
+
+// ByInvitationTokens orders the results by invitation_tokens terms.
+func ByInvitationTokens(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newInvitationTokensStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByNotifiersCount orders the results by notifiers count.
+func ByNotifiersCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newNotifiersStep(), opts...)
+	}
+}
+
+// ByNotifiers orders the results by notifiers terms.
+func ByNotifiers(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newNotifiersStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newUsersStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(UsersInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, UsersTable, UsersColumn),
+	)
+}
+func newLocationsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(LocationsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, LocationsTable, LocationsColumn),
+	)
+}
+func newItemsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ItemsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ItemsTable, ItemsColumn),
+	)
+}
+func newLabelsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(LabelsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, LabelsTable, LabelsColumn),
+	)
+}
+func newDocumentsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(DocumentsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, DocumentsTable, DocumentsColumn),
+	)
+}
+func newInvitationTokensStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(InvitationTokensInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, InvitationTokensTable, InvitationTokensColumn),
+	)
+}
+func newNotifiersStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(NotifiersInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, NotifiersTable, NotifiersColumn),
+	)
 }

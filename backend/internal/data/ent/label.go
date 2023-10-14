@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/group"
@@ -32,6 +33,7 @@ type Label struct {
 	// The values are being populated by the LabelQuery when eager-loading is set.
 	Edges        LabelEdges `json:"edges"`
 	group_labels *uuid.UUID
+	selectValues sql.SelectValues
 }
 
 // LabelEdges holds the relations/edges for other nodes in the graph.
@@ -81,7 +83,7 @@ func (*Label) scanValues(columns []string) ([]any, error) {
 		case label.ForeignKeys[0]: // group_labels
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		default:
-			return nil, fmt.Errorf("unexpected column %q for type Label", columns[i])
+			values[i] = new(sql.UnknownType)
 		}
 	}
 	return values, nil
@@ -138,26 +140,34 @@ func (l *Label) assignValues(columns []string, values []any) error {
 				l.group_labels = new(uuid.UUID)
 				*l.group_labels = *value.S.(*uuid.UUID)
 			}
+		default:
+			l.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
 }
 
+// Value returns the ent.Value that was dynamically selected and assigned to the Label.
+// This includes values selected through modifiers, order, etc.
+func (l *Label) Value(name string) (ent.Value, error) {
+	return l.selectValues.Get(name)
+}
+
 // QueryGroup queries the "group" edge of the Label entity.
 func (l *Label) QueryGroup() *GroupQuery {
-	return (&LabelClient{config: l.config}).QueryGroup(l)
+	return NewLabelClient(l.config).QueryGroup(l)
 }
 
 // QueryItems queries the "items" edge of the Label entity.
 func (l *Label) QueryItems() *ItemQuery {
-	return (&LabelClient{config: l.config}).QueryItems(l)
+	return NewLabelClient(l.config).QueryItems(l)
 }
 
 // Update returns a builder for updating this Label.
 // Note that you need to call Label.Unwrap() before calling this method if this Label
 // was returned from a transaction, and the transaction was committed or rolled back.
 func (l *Label) Update() *LabelUpdateOne {
-	return (&LabelClient{config: l.config}).UpdateOne(l)
+	return NewLabelClient(l.config).UpdateOne(l)
 }
 
 // Unwrap unwraps the Label entity that was returned from a transaction after it was closed,
@@ -196,9 +206,3 @@ func (l *Label) String() string {
 
 // Labels is a parsable slice of Label.
 type Labels []*Label
-
-func (l Labels) config(cfg config) {
-	for _i := range l {
-		l[_i].config = cfg
-	}
-}

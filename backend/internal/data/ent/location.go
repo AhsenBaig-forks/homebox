@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/hay-kot/homebox/backend/internal/data/ent/group"
@@ -31,16 +32,17 @@ type Location struct {
 	Edges             LocationEdges `json:"edges"`
 	group_locations   *uuid.UUID
 	location_children *uuid.UUID
+	selectValues      sql.SelectValues
 }
 
 // LocationEdges holds the relations/edges for other nodes in the graph.
 type LocationEdges struct {
+	// Group holds the value of the group edge.
+	Group *Group `json:"group,omitempty"`
 	// Parent holds the value of the parent edge.
 	Parent *Location `json:"parent,omitempty"`
 	// Children holds the value of the children edge.
 	Children []*Location `json:"children,omitempty"`
-	// Group holds the value of the group edge.
-	Group *Group `json:"group,omitempty"`
 	// Items holds the value of the items edge.
 	Items []*Item `json:"items,omitempty"`
 	// loadedTypes holds the information for reporting if a
@@ -48,10 +50,23 @@ type LocationEdges struct {
 	loadedTypes [4]bool
 }
 
+// GroupOrErr returns the Group value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e LocationEdges) GroupOrErr() (*Group, error) {
+	if e.loadedTypes[0] {
+		if e.Group == nil {
+			// Edge was loaded but was not found.
+			return nil, &NotFoundError{label: group.Label}
+		}
+		return e.Group, nil
+	}
+	return nil, &NotLoadedError{edge: "group"}
+}
+
 // ParentOrErr returns the Parent value or an error if the edge
 // was not loaded in eager-loading, or loaded but was not found.
 func (e LocationEdges) ParentOrErr() (*Location, error) {
-	if e.loadedTypes[0] {
+	if e.loadedTypes[1] {
 		if e.Parent == nil {
 			// Edge was loaded but was not found.
 			return nil, &NotFoundError{label: location.Label}
@@ -64,23 +79,10 @@ func (e LocationEdges) ParentOrErr() (*Location, error) {
 // ChildrenOrErr returns the Children value or an error if the edge
 // was not loaded in eager-loading.
 func (e LocationEdges) ChildrenOrErr() ([]*Location, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[2] {
 		return e.Children, nil
 	}
 	return nil, &NotLoadedError{edge: "children"}
-}
-
-// GroupOrErr returns the Group value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e LocationEdges) GroupOrErr() (*Group, error) {
-	if e.loadedTypes[2] {
-		if e.Group == nil {
-			// Edge was loaded but was not found.
-			return nil, &NotFoundError{label: group.Label}
-		}
-		return e.Group, nil
-	}
-	return nil, &NotLoadedError{edge: "group"}
 }
 
 // ItemsOrErr returns the Items value or an error if the edge
@@ -108,7 +110,7 @@ func (*Location) scanValues(columns []string) ([]any, error) {
 		case location.ForeignKeys[1]: // location_children
 			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		default:
-			return nil, fmt.Errorf("unexpected column %q for type Location", columns[i])
+			values[i] = new(sql.UnknownType)
 		}
 	}
 	return values, nil
@@ -166,36 +168,44 @@ func (l *Location) assignValues(columns []string, values []any) error {
 				l.location_children = new(uuid.UUID)
 				*l.location_children = *value.S.(*uuid.UUID)
 			}
+		default:
+			l.selectValues.Set(columns[i], values[i])
 		}
 	}
 	return nil
 }
 
-// QueryParent queries the "parent" edge of the Location entity.
-func (l *Location) QueryParent() *LocationQuery {
-	return (&LocationClient{config: l.config}).QueryParent(l)
-}
-
-// QueryChildren queries the "children" edge of the Location entity.
-func (l *Location) QueryChildren() *LocationQuery {
-	return (&LocationClient{config: l.config}).QueryChildren(l)
+// Value returns the ent.Value that was dynamically selected and assigned to the Location.
+// This includes values selected through modifiers, order, etc.
+func (l *Location) Value(name string) (ent.Value, error) {
+	return l.selectValues.Get(name)
 }
 
 // QueryGroup queries the "group" edge of the Location entity.
 func (l *Location) QueryGroup() *GroupQuery {
-	return (&LocationClient{config: l.config}).QueryGroup(l)
+	return NewLocationClient(l.config).QueryGroup(l)
+}
+
+// QueryParent queries the "parent" edge of the Location entity.
+func (l *Location) QueryParent() *LocationQuery {
+	return NewLocationClient(l.config).QueryParent(l)
+}
+
+// QueryChildren queries the "children" edge of the Location entity.
+func (l *Location) QueryChildren() *LocationQuery {
+	return NewLocationClient(l.config).QueryChildren(l)
 }
 
 // QueryItems queries the "items" edge of the Location entity.
 func (l *Location) QueryItems() *ItemQuery {
-	return (&LocationClient{config: l.config}).QueryItems(l)
+	return NewLocationClient(l.config).QueryItems(l)
 }
 
 // Update returns a builder for updating this Location.
 // Note that you need to call Location.Unwrap() before calling this method if this Location
 // was returned from a transaction, and the transaction was committed or rolled back.
 func (l *Location) Update() *LocationUpdateOne {
-	return (&LocationClient{config: l.config}).UpdateOne(l)
+	return NewLocationClient(l.config).UpdateOne(l)
 }
 
 // Unwrap unwraps the Location entity that was returned from a transaction after it was closed,
@@ -231,9 +241,3 @@ func (l *Location) String() string {
 
 // Locations is a parsable slice of Location.
 type Locations []*Location
-
-func (l Locations) config(cfg config) {
-	for _i := range l {
-		l[_i].config = cfg
-	}
-}

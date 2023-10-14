@@ -1,24 +1,61 @@
 import { Requests } from "../../requests";
+import { route } from ".";
+
+const ZERO_DATE = "0001-01-01T00:00:00Z";
 
 type BaseApiType = {
   createdAt: string;
   updatedAt: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   [key: string]: any;
 };
 
-export function hasKey(obj: object, key: string): obj is Required<BaseApiType> {
-  return typeof obj[key] === "string";
+export function hasKey(obj: Record<string, any>, key: string): obj is Required<BaseApiType> {
+  return key in obj ? typeof obj[key] === "string" : false;
 }
 
 export function parseDate<T>(obj: T, keys: Array<keyof T> = []): T {
   const result = { ...obj };
   [...keys, "createdAt", "updatedAt"].forEach(key => {
-    // @ts-ignore - TS doesn't know that we're checking for the key above
+    // @ts-expect-error - TS doesn't know that we're checking for the key above
     if (hasKey(result, key)) {
-      // Ensure date like format YYYY/MM/DD - otherwise results will be 1 day off
-      const dateStr: string = result[key].split("T")[0].replace(/-/g, "/");
-      result[key] = new Date(dateStr);
+      const value = result[key] as string;
+
+      if (value === undefined || value === "" || value.startsWith(ZERO_DATE)) {
+        const dt = new Date();
+        dt.setFullYear(1);
+
+        result[key] = dt;
+        return;
+      }
+
+      // Possible Formats
+      // Date Only: YYYY-MM-DD
+      // Timestamp: 0001-01-01T00:00:00Z
+
+      // Parse timestamps with default date
+      if (value.includes("T")) {
+        result[key] = new Date(value);
+        return;
+      }
+
+      // Parse dates with default time
+      const split = value.split("-");
+
+      if (split.length !== 3) {
+        console.log(`Invalid date format: ${value}`);
+        throw new Error(`Invalid date format: ${value}`);
+      }
+
+      const [year, month, day] = split;
+
+      const dt = new Date();
+
+      dt.setFullYear(parseInt(year, 10));
+      dt.setMonth(parseInt(month, 10) - 1);
+      dt.setDate(parseInt(day, 10));
+
+      result[key] = dt;
     }
   });
 
@@ -27,9 +64,21 @@ export function parseDate<T>(obj: T, keys: Array<keyof T> = []): T {
 
 export class BaseAPI {
   http: Requests;
+  attachmentToken: string;
 
-  constructor(requests: Requests) {
+  constructor(requests: Requests, attachmentToken = "") {
     this.http = requests;
+    this.attachmentToken = attachmentToken;
+  }
+
+  // if an attachmentToken is present, it will be added to URL as a query param
+  // this is done with a simple appending of the query param to the URL. If your
+  // URL already has a query param, this will not work.
+  authURL(url: string): string {
+    if (this.attachmentToken) {
+      return route(url, { access_token: this.attachmentToken });
+    }
+    return url;
   }
 
   /**

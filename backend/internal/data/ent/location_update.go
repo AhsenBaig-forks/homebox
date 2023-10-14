@@ -63,6 +63,17 @@ func (lu *LocationUpdate) ClearDescription() *LocationUpdate {
 	return lu
 }
 
+// SetGroupID sets the "group" edge to the Group entity by ID.
+func (lu *LocationUpdate) SetGroupID(id uuid.UUID) *LocationUpdate {
+	lu.mutation.SetGroupID(id)
+	return lu
+}
+
+// SetGroup sets the "group" edge to the Group entity.
+func (lu *LocationUpdate) SetGroup(g *Group) *LocationUpdate {
+	return lu.SetGroupID(g.ID)
+}
+
 // SetParentID sets the "parent" edge to the Location entity by ID.
 func (lu *LocationUpdate) SetParentID(id uuid.UUID) *LocationUpdate {
 	lu.mutation.SetParentID(id)
@@ -97,17 +108,6 @@ func (lu *LocationUpdate) AddChildren(l ...*Location) *LocationUpdate {
 	return lu.AddChildIDs(ids...)
 }
 
-// SetGroupID sets the "group" edge to the Group entity by ID.
-func (lu *LocationUpdate) SetGroupID(id uuid.UUID) *LocationUpdate {
-	lu.mutation.SetGroupID(id)
-	return lu
-}
-
-// SetGroup sets the "group" edge to the Group entity.
-func (lu *LocationUpdate) SetGroup(g *Group) *LocationUpdate {
-	return lu.SetGroupID(g.ID)
-}
-
 // AddItemIDs adds the "items" edge to the Item entity by IDs.
 func (lu *LocationUpdate) AddItemIDs(ids ...uuid.UUID) *LocationUpdate {
 	lu.mutation.AddItemIDs(ids...)
@@ -126,6 +126,12 @@ func (lu *LocationUpdate) AddItems(i ...*Item) *LocationUpdate {
 // Mutation returns the LocationMutation object of the builder.
 func (lu *LocationUpdate) Mutation() *LocationMutation {
 	return lu.mutation
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (lu *LocationUpdate) ClearGroup() *LocationUpdate {
+	lu.mutation.ClearGroup()
+	return lu
 }
 
 // ClearParent clears the "parent" edge to the Location entity.
@@ -155,12 +161,6 @@ func (lu *LocationUpdate) RemoveChildren(l ...*Location) *LocationUpdate {
 	return lu.RemoveChildIDs(ids...)
 }
 
-// ClearGroup clears the "group" edge to the Group entity.
-func (lu *LocationUpdate) ClearGroup() *LocationUpdate {
-	lu.mutation.ClearGroup()
-	return lu
-}
-
 // ClearItems clears all "items" edges to the Item entity.
 func (lu *LocationUpdate) ClearItems() *LocationUpdate {
 	lu.mutation.ClearItems()
@@ -184,41 +184,8 @@ func (lu *LocationUpdate) RemoveItems(i ...*Item) *LocationUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (lu *LocationUpdate) Save(ctx context.Context) (int, error) {
-	var (
-		err      error
-		affected int
-	)
 	lu.defaults()
-	if len(lu.hooks) == 0 {
-		if err = lu.check(); err != nil {
-			return 0, err
-		}
-		affected, err = lu.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*LocationMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = lu.check(); err != nil {
-				return 0, err
-			}
-			lu.mutation = mutation
-			affected, err = lu.sqlSave(ctx)
-			mutation.done = true
-			return affected, err
-		})
-		for i := len(lu.hooks) - 1; i >= 0; i-- {
-			if lu.hooks[i] == nil {
-				return 0, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = lu.hooks[i](mut)
-		}
-		if _, err := mut.Mutate(ctx, lu.mutation); err != nil {
-			return 0, err
-		}
-	}
-	return affected, err
+	return withHooks(ctx, lu.sqlSave, lu.mutation, lu.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -270,16 +237,10 @@ func (lu *LocationUpdate) check() error {
 }
 
 func (lu *LocationUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   location.Table,
-			Columns: location.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: location.FieldID,
-			},
-		},
+	if err := lu.check(); err != nil {
+		return n, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(location.Table, location.Columns, sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID))
 	if ps := lu.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {
@@ -288,31 +249,45 @@ func (lu *LocationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 	}
 	if value, ok := lu.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: location.FieldUpdatedAt,
-		})
+		_spec.SetField(location.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := lu.mutation.Name(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: location.FieldName,
-		})
+		_spec.SetField(location.FieldName, field.TypeString, value)
 	}
 	if value, ok := lu.mutation.Description(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: location.FieldDescription,
-		})
+		_spec.SetField(location.FieldDescription, field.TypeString, value)
 	}
 	if lu.mutation.DescriptionCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: location.FieldDescription,
-		})
+		_spec.ClearField(location.FieldDescription, field.TypeString)
+	}
+	if lu.mutation.GroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   location.GroupTable,
+			Columns: []string{location.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := lu.mutation.GroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   location.GroupTable,
+			Columns: []string{location.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if lu.mutation.ParentCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -322,10 +297,7 @@ func (lu *LocationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{location.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -338,10 +310,7 @@ func (lu *LocationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{location.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -357,10 +326,7 @@ func (lu *LocationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{location.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -373,10 +339,7 @@ func (lu *LocationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{location.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -392,45 +355,7 @@ func (lu *LocationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{location.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if lu.mutation.GroupCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   location.GroupTable,
-			Columns: []string{location.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := lu.mutation.GroupIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   location.GroupTable,
-			Columns: []string{location.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -446,10 +371,7 @@ func (lu *LocationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{location.ItemsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -462,10 +384,7 @@ func (lu *LocationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{location.ItemsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -481,10 +400,7 @@ func (lu *LocationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{location.ItemsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -500,6 +416,7 @@ func (lu *LocationUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		return 0, err
 	}
+	lu.mutation.done = true
 	return n, nil
 }
 
@@ -543,6 +460,17 @@ func (luo *LocationUpdateOne) ClearDescription() *LocationUpdateOne {
 	return luo
 }
 
+// SetGroupID sets the "group" edge to the Group entity by ID.
+func (luo *LocationUpdateOne) SetGroupID(id uuid.UUID) *LocationUpdateOne {
+	luo.mutation.SetGroupID(id)
+	return luo
+}
+
+// SetGroup sets the "group" edge to the Group entity.
+func (luo *LocationUpdateOne) SetGroup(g *Group) *LocationUpdateOne {
+	return luo.SetGroupID(g.ID)
+}
+
 // SetParentID sets the "parent" edge to the Location entity by ID.
 func (luo *LocationUpdateOne) SetParentID(id uuid.UUID) *LocationUpdateOne {
 	luo.mutation.SetParentID(id)
@@ -577,17 +505,6 @@ func (luo *LocationUpdateOne) AddChildren(l ...*Location) *LocationUpdateOne {
 	return luo.AddChildIDs(ids...)
 }
 
-// SetGroupID sets the "group" edge to the Group entity by ID.
-func (luo *LocationUpdateOne) SetGroupID(id uuid.UUID) *LocationUpdateOne {
-	luo.mutation.SetGroupID(id)
-	return luo
-}
-
-// SetGroup sets the "group" edge to the Group entity.
-func (luo *LocationUpdateOne) SetGroup(g *Group) *LocationUpdateOne {
-	return luo.SetGroupID(g.ID)
-}
-
 // AddItemIDs adds the "items" edge to the Item entity by IDs.
 func (luo *LocationUpdateOne) AddItemIDs(ids ...uuid.UUID) *LocationUpdateOne {
 	luo.mutation.AddItemIDs(ids...)
@@ -606,6 +523,12 @@ func (luo *LocationUpdateOne) AddItems(i ...*Item) *LocationUpdateOne {
 // Mutation returns the LocationMutation object of the builder.
 func (luo *LocationUpdateOne) Mutation() *LocationMutation {
 	return luo.mutation
+}
+
+// ClearGroup clears the "group" edge to the Group entity.
+func (luo *LocationUpdateOne) ClearGroup() *LocationUpdateOne {
+	luo.mutation.ClearGroup()
+	return luo
 }
 
 // ClearParent clears the "parent" edge to the Location entity.
@@ -635,12 +558,6 @@ func (luo *LocationUpdateOne) RemoveChildren(l ...*Location) *LocationUpdateOne 
 	return luo.RemoveChildIDs(ids...)
 }
 
-// ClearGroup clears the "group" edge to the Group entity.
-func (luo *LocationUpdateOne) ClearGroup() *LocationUpdateOne {
-	luo.mutation.ClearGroup()
-	return luo
-}
-
 // ClearItems clears all "items" edges to the Item entity.
 func (luo *LocationUpdateOne) ClearItems() *LocationUpdateOne {
 	luo.mutation.ClearItems()
@@ -662,6 +579,12 @@ func (luo *LocationUpdateOne) RemoveItems(i ...*Item) *LocationUpdateOne {
 	return luo.RemoveItemIDs(ids...)
 }
 
+// Where appends a list predicates to the LocationUpdate builder.
+func (luo *LocationUpdateOne) Where(ps ...predicate.Location) *LocationUpdateOne {
+	luo.mutation.Where(ps...)
+	return luo
+}
+
 // Select allows selecting one or more fields (columns) of the returned entity.
 // The default is selecting all fields defined in the entity schema.
 func (luo *LocationUpdateOne) Select(field string, fields ...string) *LocationUpdateOne {
@@ -671,47 +594,8 @@ func (luo *LocationUpdateOne) Select(field string, fields ...string) *LocationUp
 
 // Save executes the query and returns the updated Location entity.
 func (luo *LocationUpdateOne) Save(ctx context.Context) (*Location, error) {
-	var (
-		err  error
-		node *Location
-	)
 	luo.defaults()
-	if len(luo.hooks) == 0 {
-		if err = luo.check(); err != nil {
-			return nil, err
-		}
-		node, err = luo.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*LocationMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = luo.check(); err != nil {
-				return nil, err
-			}
-			luo.mutation = mutation
-			node, err = luo.sqlSave(ctx)
-			mutation.done = true
-			return node, err
-		})
-		for i := len(luo.hooks) - 1; i >= 0; i-- {
-			if luo.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = luo.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, luo.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*Location)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from LocationMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, luo.sqlSave, luo.mutation, luo.hooks)
 }
 
 // SaveX is like Save, but panics if an error occurs.
@@ -763,16 +647,10 @@ func (luo *LocationUpdateOne) check() error {
 }
 
 func (luo *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err error) {
-	_spec := &sqlgraph.UpdateSpec{
-		Node: &sqlgraph.NodeSpec{
-			Table:   location.Table,
-			Columns: location.Columns,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: location.FieldID,
-			},
-		},
+	if err := luo.check(); err != nil {
+		return _node, err
 	}
+	_spec := sqlgraph.NewUpdateSpec(location.Table, location.Columns, sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID))
 	id, ok := luo.mutation.ID()
 	if !ok {
 		return nil, &ValidationError{Name: "id", err: errors.New(`ent: missing "Location.id" for update`)}
@@ -798,31 +676,45 @@ func (luo *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err
 		}
 	}
 	if value, ok := luo.mutation.UpdatedAt(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: location.FieldUpdatedAt,
-		})
+		_spec.SetField(location.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := luo.mutation.Name(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: location.FieldName,
-		})
+		_spec.SetField(location.FieldName, field.TypeString, value)
 	}
 	if value, ok := luo.mutation.Description(); ok {
-		_spec.Fields.Set = append(_spec.Fields.Set, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: location.FieldDescription,
-		})
+		_spec.SetField(location.FieldDescription, field.TypeString, value)
 	}
 	if luo.mutation.DescriptionCleared() {
-		_spec.Fields.Clear = append(_spec.Fields.Clear, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Column: location.FieldDescription,
-		})
+		_spec.ClearField(location.FieldDescription, field.TypeString)
+	}
+	if luo.mutation.GroupCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   location.GroupTable,
+			Columns: []string{location.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := luo.mutation.GroupIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   location.GroupTable,
+			Columns: []string{location.GroupColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if luo.mutation.ParentCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -832,10 +724,7 @@ func (luo *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err
 			Columns: []string{location.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -848,10 +737,7 @@ func (luo *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err
 			Columns: []string{location.ParentColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -867,10 +753,7 @@ func (luo *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err
 			Columns: []string{location.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -883,10 +766,7 @@ func (luo *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err
 			Columns: []string{location.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -902,45 +782,7 @@ func (luo *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err
 			Columns: []string{location.ChildrenColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: location.FieldID,
-				},
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if luo.mutation.GroupCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   location.GroupTable,
-			Columns: []string{location.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := luo.mutation.GroupIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   location.GroupTable,
-			Columns: []string{location.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: group.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(location.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -956,10 +798,7 @@ func (luo *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err
 			Columns: []string{location.ItemsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -972,10 +811,7 @@ func (luo *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err
 			Columns: []string{location.ItemsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -991,10 +827,7 @@ func (luo *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err
 			Columns: []string{location.ItemsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -1013,5 +846,6 @@ func (luo *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err
 		}
 		return nil, err
 	}
+	luo.mutation.done = true
 	return _node, nil
 }

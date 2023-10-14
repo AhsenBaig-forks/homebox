@@ -172,50 +172,8 @@ func (ifc *ItemFieldCreate) Mutation() *ItemFieldMutation {
 
 // Save creates the ItemField in the database.
 func (ifc *ItemFieldCreate) Save(ctx context.Context) (*ItemField, error) {
-	var (
-		err  error
-		node *ItemField
-	)
 	ifc.defaults()
-	if len(ifc.hooks) == 0 {
-		if err = ifc.check(); err != nil {
-			return nil, err
-		}
-		node, err = ifc.sqlSave(ctx)
-	} else {
-		var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-			mutation, ok := m.(*ItemFieldMutation)
-			if !ok {
-				return nil, fmt.Errorf("unexpected mutation type %T", m)
-			}
-			if err = ifc.check(); err != nil {
-				return nil, err
-			}
-			ifc.mutation = mutation
-			if node, err = ifc.sqlSave(ctx); err != nil {
-				return nil, err
-			}
-			mutation.id = &node.ID
-			mutation.done = true
-			return node, err
-		})
-		for i := len(ifc.hooks) - 1; i >= 0; i-- {
-			if ifc.hooks[i] == nil {
-				return nil, fmt.Errorf("ent: uninitialized hook (forgotten import ent/runtime?)")
-			}
-			mut = ifc.hooks[i](mut)
-		}
-		v, err := mut.Mutate(ctx, ifc.mutation)
-		if err != nil {
-			return nil, err
-		}
-		nv, ok := v.(*ItemField)
-		if !ok {
-			return nil, fmt.Errorf("unexpected node type %T returned from ItemFieldMutation", v)
-		}
-		node = nv
-	}
-	return node, err
+	return withHooks(ctx, ifc.sqlSave, ifc.mutation, ifc.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
@@ -308,6 +266,9 @@ func (ifc *ItemFieldCreate) check() error {
 }
 
 func (ifc *ItemFieldCreate) sqlSave(ctx context.Context) (*ItemField, error) {
+	if err := ifc.check(); err != nil {
+		return nil, err
+	}
 	_node, _spec := ifc.createSpec()
 	if err := sqlgraph.CreateNode(ctx, ifc.driver, _spec); err != nil {
 		if sqlgraph.IsConstraintError(err) {
@@ -322,94 +283,54 @@ func (ifc *ItemFieldCreate) sqlSave(ctx context.Context) (*ItemField, error) {
 			return nil, err
 		}
 	}
+	ifc.mutation.id = &_node.ID
+	ifc.mutation.done = true
 	return _node, nil
 }
 
 func (ifc *ItemFieldCreate) createSpec() (*ItemField, *sqlgraph.CreateSpec) {
 	var (
 		_node = &ItemField{config: ifc.config}
-		_spec = &sqlgraph.CreateSpec{
-			Table: itemfield.Table,
-			ID: &sqlgraph.FieldSpec{
-				Type:   field.TypeUUID,
-				Column: itemfield.FieldID,
-			},
-		}
+		_spec = sqlgraph.NewCreateSpec(itemfield.Table, sqlgraph.NewFieldSpec(itemfield.FieldID, field.TypeUUID))
 	)
 	if id, ok := ifc.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = &id
 	}
 	if value, ok := ifc.mutation.CreatedAt(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: itemfield.FieldCreatedAt,
-		})
+		_spec.SetField(itemfield.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
 	}
 	if value, ok := ifc.mutation.UpdatedAt(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: itemfield.FieldUpdatedAt,
-		})
+		_spec.SetField(itemfield.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
 	}
 	if value, ok := ifc.mutation.Name(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: itemfield.FieldName,
-		})
+		_spec.SetField(itemfield.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
 	if value, ok := ifc.mutation.Description(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: itemfield.FieldDescription,
-		})
+		_spec.SetField(itemfield.FieldDescription, field.TypeString, value)
 		_node.Description = value
 	}
 	if value, ok := ifc.mutation.GetType(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeEnum,
-			Value:  value,
-			Column: itemfield.FieldType,
-		})
+		_spec.SetField(itemfield.FieldType, field.TypeEnum, value)
 		_node.Type = value
 	}
 	if value, ok := ifc.mutation.TextValue(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeString,
-			Value:  value,
-			Column: itemfield.FieldTextValue,
-		})
+		_spec.SetField(itemfield.FieldTextValue, field.TypeString, value)
 		_node.TextValue = value
 	}
 	if value, ok := ifc.mutation.NumberValue(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeInt,
-			Value:  value,
-			Column: itemfield.FieldNumberValue,
-		})
+		_spec.SetField(itemfield.FieldNumberValue, field.TypeInt, value)
 		_node.NumberValue = value
 	}
 	if value, ok := ifc.mutation.BooleanValue(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeBool,
-			Value:  value,
-			Column: itemfield.FieldBooleanValue,
-		})
+		_spec.SetField(itemfield.FieldBooleanValue, field.TypeBool, value)
 		_node.BooleanValue = value
 	}
 	if value, ok := ifc.mutation.TimeValue(); ok {
-		_spec.Fields = append(_spec.Fields, &sqlgraph.FieldSpec{
-			Type:   field.TypeTime,
-			Value:  value,
-			Column: itemfield.FieldTimeValue,
-		})
+		_spec.SetField(itemfield.FieldTimeValue, field.TypeTime, value)
 		_node.TimeValue = value
 	}
 	if nodes := ifc.mutation.ItemIDs(); len(nodes) > 0 {
@@ -420,10 +341,7 @@ func (ifc *ItemFieldCreate) createSpec() (*ItemField, *sqlgraph.CreateSpec) {
 			Columns: []string{itemfield.ItemColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: &sqlgraph.FieldSpec{
-					Type:   field.TypeUUID,
-					Column: item.FieldID,
-				},
+				IDSpec: sqlgraph.NewFieldSpec(item.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
@@ -459,8 +377,8 @@ func (ifcb *ItemFieldCreateBulk) Save(ctx context.Context) ([]*ItemField, error)
 					return nil, err
 				}
 				builder.mutation = mutation
-				nodes[i], specs[i] = builder.createSpec()
 				var err error
+				nodes[i], specs[i] = builder.createSpec()
 				if i < len(mutators)-1 {
 					_, err = mutators[i+1].Mutate(root, ifcb.builders[i+1].mutation)
 				} else {

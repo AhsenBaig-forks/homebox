@@ -24,6 +24,8 @@ definitions:
     type: object
   repo.GroupStatistics:
     properties:
+      totalItemPrice:
+        type: number
       totalItems:
         type: integer
       totalLabels:
@@ -31,6 +33,8 @@ definitions:
       totalLocations:
         type: integer
       totalUsers:
+        type: integer
+      totalWithWarranty:
         type: integer
     type: object
   repo.GroupUpdate:
@@ -48,6 +52,8 @@ definitions:
         $ref: '#/definitions/repo.DocumentOut'
       id:
         type: string
+      primary:
+        type: boolean
       type:
         type: string
       updatedAt:
@@ -55,6 +61,8 @@ definitions:
     type: object
   repo.ItemAttachmentUpdate:
     properties:
+      primary:
+        type: boolean
       title:
         type: string
       type:
@@ -63,6 +71,7 @@ definitions:
   repo.ItemCreate:
     properties:
       description:
+        maxLength: 1000
         type: string
       labelIds:
         items:
@@ -72,10 +81,14 @@ definitions:
         description: Edges
         type: string
       name:
+        maxLength: 255
+        minLength: 1
         type: string
       parentId:
         type: string
         x-nullable: true
+    required:
+    - name
     type: object
   repo.ItemField:
     properties:
@@ -89,8 +102,6 @@ definitions:
         type: integer
       textValue:
         type: string
-      timeValue:
-        type: string
       type:
         type: string
     type: object
@@ -98,6 +109,9 @@ definitions:
     properties:
       archived:
         type: boolean
+      assetId:
+        example: "0"
+        type: string
       attachments:
         items:
           $ref: '#/definitions/repo.ItemAttachment'
@@ -115,6 +129,8 @@ definitions:
           $ref: '#/definitions/repo.ItemField'
         type: array
       id:
+        type: string
+      imageId:
         type: string
       insured:
         type: boolean
@@ -172,6 +188,15 @@ definitions:
       warrantyExpires:
         type: string
     type: object
+  repo.ItemPatch:
+    properties:
+      id:
+        type: string
+      quantity:
+        type: integer
+        x-nullable: true
+        x-omitempty: true
+    type: object
   repo.ItemSummary:
     properties:
       archived:
@@ -181,6 +206,8 @@ definitions:
       description:
         type: string
       id:
+        type: string
+      imageId:
         type: string
       insured:
         type: boolean
@@ -195,6 +222,9 @@ definitions:
         x-omitempty: true
       name:
         type: string
+      purchasePrice:
+        example: "0"
+        type: string
       quantity:
         type: integer
       updatedAt:
@@ -204,6 +234,8 @@ definitions:
     properties:
       archived:
         type: boolean
+      assetId:
+        type: string
       description:
         type: string
       fields:
@@ -263,6 +295,7 @@ definitions:
       warrantyDetails:
         type: string
       warrantyExpires:
+        description: Sold
         type: string
     type: object
   repo.LabelCreate:
@@ -270,9 +303,14 @@ definitions:
       color:
         type: string
       description:
+        maxLength: 255
         type: string
       name:
+        maxLength: 255
+        minLength: 1
         type: string
+    required:
+    - name
     type: object
   repo.LabelOut:
     properties:
@@ -282,10 +320,6 @@ definitions:
         type: string
       id:
         type: string
-      items:
-        items:
-          $ref: '#/definitions/repo.ItemSummary'
-        type: array
       name:
         type: string
       updatedAt:
@@ -310,6 +344,9 @@ definitions:
         type: string
       name:
         type: string
+      parentId:
+        type: string
+        x-nullable: true
     type: object
   repo.LocationOut:
     properties:
@@ -323,10 +360,6 @@ definitions:
         type: string
       id:
         type: string
-      items:
-        items:
-          $ref: '#/definitions/repo.ItemSummary'
-        type: array
       name:
         type: string
       parent:
@@ -374,6 +407,116 @@ definitions:
         type: string
         x-nullable: true
     type: object
+  repo.MaintenanceEntry:
+    properties:
+      completedDate:
+        description: Sold
+        type: string
+      cost:
+        example: "0"
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      scheduledDate:
+        description: Sold
+        type: string
+    type: object
+  repo.MaintenanceEntryCreate:
+    properties:
+      completedDate:
+        description: Sold
+        type: string
+      cost:
+        example: "0"
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      scheduledDate:
+        description: Sold
+        type: string
+    required:
+    - name
+    type: object
+  repo.MaintenanceEntryUpdate:
+    properties:
+      completedDate:
+        description: Sold
+        type: string
+      cost:
+        example: "0"
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      scheduledDate:
+        description: Sold
+        type: string
+    type: object
+  repo.MaintenanceLog:
+    properties:
+      costAverage:
+        type: number
+      costTotal:
+        type: number
+      entries:
+        items:
+          $ref: '#/definitions/repo.MaintenanceEntry'
+        type: array
+      itemId:
+        type: string
+    type: object
+  repo.NotifierCreate:
+    properties:
+      isActive:
+        type: boolean
+      name:
+        maxLength: 255
+        minLength: 1
+        type: string
+      url:
+        type: string
+    required:
+    - name
+    - url
+    type: object
+  repo.NotifierOut:
+    properties:
+      createdAt:
+        type: string
+      groupId:
+        type: string
+      id:
+        type: string
+      isActive:
+        type: boolean
+      name:
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  repo.NotifierUpdate:
+    properties:
+      isActive:
+        type: boolean
+      name:
+        maxLength: 255
+        minLength: 1
+        type: string
+      url:
+        type: string
+        x-nullable: true
+    required:
+    - name
+    type: object
   repo.PaginationResult-repo_ItemSummary:
     properties:
       items:
@@ -386,6 +529,28 @@ definitions:
         type: integer
       total:
         type: integer
+    type: object
+  repo.TotalsByOrganizer:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      total:
+        type: number
+    type: object
+  repo.TreeItem:
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/repo.TreeItem'
+        type: array
+      id:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
     type: object
   repo.UserOut:
     properties:
@@ -411,27 +576,29 @@ definitions:
       name:
         type: string
     type: object
-  server.ErrorResponse:
+  repo.ValueOverTime:
     properties:
-      error:
+      end:
         type: string
-      fields:
-        additionalProperties:
-          type: string
-        type: object
-    type: object
-  server.Result:
-    properties:
-      details: {}
-      error:
-        type: boolean
-      item: {}
-      message:
+      entries:
+        items:
+          $ref: '#/definitions/repo.ValueOverTimeEntry'
+        type: array
+      start:
         type: string
+      valueAtEnd:
+        type: number
+      valueAtStart:
+        type: number
     type: object
-  server.Results:
+  repo.ValueOverTimeEntry:
     properties:
-      items: {}
+      date:
+        type: string
+      name:
+        type: string
+      value:
+        type: number
     type: object
   services.UserRegistration:
     properties:
@@ -444,8 +611,15 @@ definitions:
       token:
         type: string
     type: object
+  v1.ActionAmountResult:
+    properties:
+      completed:
+        type: integer
+    type: object
   v1.ApiSummary:
     properties:
+      allowRegistration:
+        type: boolean
       build:
         $ref: '#/definitions/v1.Build'
       demo:
@@ -491,31 +665,133 @@ definitions:
       expiresAt:
         type: string
       uses:
+        maximum: 100
+        minimum: 1
         type: integer
+    required:
+    - uses
     type: object
   v1.ItemAttachmentToken:
     properties:
       token:
         type: string
     type: object
+  v1.LoginForm:
+    properties:
+      password:
+        type: string
+      stayLoggedIn:
+        type: boolean
+      username:
+        type: string
+    type: object
   v1.TokenResponse:
     properties:
+      attachmentToken:
+        type: string
       expiresAt:
         type: string
       token:
         type: string
     type: object
+  v1.Wrapped:
+    properties:
+      item: {}
+    type: object
+  validate.ErrorResponse:
+    properties:
+      error:
+        type: string
+      fields:
+        type: string
+    type: object
 info:
   contact:
     name: Don't
-  description: This is a simple Rest API Server Template that implements some basic
-    User and Authentication patterns to help you get started and bootstrap your next
-    project!.
-  license:
-    name: MIT
-  title: Go API Templates
+  description: Track, Manage, and Organize your Things.
+  title: Homebox API
   version: "1.0"
 paths:
+  /v1/actions/ensure-asset-ids:
+    post:
+      description: Ensures all items in the database have an asset ID
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.ActionAmountResult'
+      security:
+      - Bearer: []
+      summary: Ensure Asset IDs
+      tags:
+      - Actions
+  /v1/actions/ensure-import-refs:
+    post:
+      description: Ensures all items in the database have an import ref
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.ActionAmountResult'
+      security:
+      - Bearer: []
+      summary: Ensures Import Refs
+      tags:
+      - Actions
+  /v1/actions/set-primary-photos:
+    post:
+      description: Sets the first photo of each item as the primary photo
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.ActionAmountResult'
+      security:
+      - Bearer: []
+      summary: Set Primary Photos
+      tags:
+      - Actions
+  /v1/actions/zero-item-time-fields:
+    post:
+      description: Resets all item date fields to the beginning of the day
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/v1.ActionAmountResult'
+      security:
+      - Bearer: []
+      summary: Zero Out Time Fields
+      tags:
+      - Actions
+  /v1/assets/{id}:
+    get:
+      parameters:
+      - description: Asset ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.PaginationResult-repo_ItemSummary'
+      security:
+      - Bearer: []
+      summary: Get Item by Asset ID
+      tags:
+      - Items
   /v1/groups:
     get:
       produces:
@@ -527,7 +803,7 @@ paths:
             $ref: '#/definitions/repo.Group'
       security:
       - Bearer: []
-      summary: Get the current user's group
+      summary: Get Group
       tags:
       - Group
     put:
@@ -547,7 +823,7 @@ paths:
             $ref: '#/definitions/repo.Group'
       security:
       - Bearer: []
-      summary: Updates some fields of the current users group
+      summary: Update Group
       tags:
       - Group
   /v1/groups/invitations:
@@ -568,7 +844,7 @@ paths:
             $ref: '#/definitions/v1.GroupInvitation'
       security:
       - Bearer: []
-      summary: Get the current user
+      summary: Create Group Invitation
       tags:
       - Group
   /v1/groups/statistics:
@@ -582,9 +858,64 @@ paths:
             $ref: '#/definitions/repo.GroupStatistics'
       security:
       - Bearer: []
-      summary: Get the current user's group
+      summary: Get Group Statistics
       tags:
-      - Group
+      - Statistics
+  /v1/groups/statistics/labels:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/repo.TotalsByOrganizer'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get Label Statistics
+      tags:
+      - Statistics
+  /v1/groups/statistics/locations:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/repo.TotalsByOrganizer'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get Location Statistics
+      tags:
+      - Statistics
+  /v1/groups/statistics/purchase-price:
+    get:
+      parameters:
+      - description: start date
+        in: query
+        name: start
+        type: string
+      - description: end date
+        in: query
+        name: end
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.ValueOverTime'
+      security:
+      - Bearer: []
+      summary: Get Purchase Price Statistics
+      tags:
+      - Statistics
   /v1/items:
     get:
       parameters:
@@ -623,7 +954,7 @@ paths:
             $ref: '#/definitions/repo.PaginationResult-repo_ItemSummary'
       security:
       - Bearer: []
-      summary: Get All Items
+      summary: Query All Items
       tags:
       - Items
     post:
@@ -637,13 +968,13 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
+        "201":
+          description: Created
           schema:
             $ref: '#/definitions/repo.ItemSummary'
       security:
       - Bearer: []
-      summary: Create a new item
+      summary: Create Item
       tags:
       - Items
   /v1/items/{id}:
@@ -661,7 +992,7 @@ paths:
           description: No Content
       security:
       - Bearer: []
-      summary: deletes a item
+      summary: Delete Item
       tags:
       - Items
     get:
@@ -680,7 +1011,32 @@ paths:
             $ref: '#/definitions/repo.ItemOut'
       security:
       - Bearer: []
-      summary: Gets a item and fields
+      summary: Get Item
+      tags:
+      - Items
+    patch:
+      parameters:
+      - description: Item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Item Data
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/repo.ItemPatch'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.ItemOut'
+      security:
+      - Bearer: []
+      summary: Update Item
       tags:
       - Items
     put:
@@ -705,7 +1061,7 @@ paths:
             $ref: '#/definitions/repo.ItemOut'
       security:
       - Bearer: []
-      summary: updates a item
+      summary: Update Item
       tags:
       - Items
   /v1/items/{id}/attachments:
@@ -741,10 +1097,10 @@ paths:
         "422":
           description: Unprocessable Entity
           schema:
-            $ref: '#/definitions/server.ErrorResponse'
+            $ref: '#/definitions/validate.ErrorResponse'
       security:
       - Bearer: []
-      summary: imports items into the database
+      summary: Create Item Attachment
       tags:
       - Items Attachments
   /v1/items/{id}/attachments/{attachment_id}:
@@ -765,7 +1121,7 @@ paths:
           description: No Content
       security:
       - Bearer: []
-      summary: retrieves an attachment for an item
+      summary: Delete Item Attachment
       tags:
       - Items Attachments
     get:
@@ -789,7 +1145,7 @@ paths:
             $ref: '#/definitions/v1.ItemAttachmentToken'
       security:
       - Bearer: []
-      summary: retrieves an attachment for an item
+      summary: Get Item Attachment
       tags:
       - Items Attachments
     put:
@@ -817,32 +1173,119 @@ paths:
             $ref: '#/definitions/repo.ItemOut'
       security:
       - Bearer: []
-      summary: retrieves an attachment for an item
+      summary: Update Item Attachment
       tags:
       - Items Attachments
-  /v1/items/{id}/attachments/download:
+  /v1/items/{id}/maintenance:
     get:
-      parameters:
-      - description: Item ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Attachment token
-        in: query
-        name: token
-        required: true
-        type: string
       produces:
-      - application/octet-stream
+      - application/json
       responses:
         "200":
           description: OK
+          schema:
+            $ref: '#/definitions/repo.MaintenanceLog'
       security:
       - Bearer: []
-      summary: retrieves an attachment for an item
+      summary: Get Maintenance Log
       tags:
-      - Items Attachments
+      - Maintenance
+    post:
+      parameters:
+      - description: Entry Data
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/repo.MaintenanceEntryCreate'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/repo.MaintenanceEntry'
+      security:
+      - Bearer: []
+      summary: Create Maintenance Entry
+      tags:
+      - Maintenance
+  /v1/items/{id}/maintenance/{entry_id}:
+    delete:
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+      security:
+      - Bearer: []
+      summary: Delete Maintenance Entry
+      tags:
+      - Maintenance
+    put:
+      parameters:
+      - description: Entry Data
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/repo.MaintenanceEntryUpdate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.MaintenanceEntry'
+      security:
+      - Bearer: []
+      summary: Update Maintenance Entry
+      tags:
+      - Maintenance
+  /v1/items/export:
+    get:
+      responses:
+        "200":
+          description: text/csv
+          schema:
+            type: string
+      security:
+      - Bearer: []
+      summary: Export Items
+      tags:
+      - Items
+  /v1/items/fields:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: string
+            type: array
+      security:
+      - Bearer: []
+      summary: Get All Custom Field Names
+      tags:
+      - Items
+  /v1/items/fields/values:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: string
+            type: array
+      security:
+      - Bearer: []
+      summary: Get All Custom Field Values
+      tags:
+      - Items
   /v1/items/import:
     post:
       parameters:
@@ -858,7 +1301,7 @@ paths:
           description: No Content
       security:
       - Bearer: []
-      summary: imports items into the database
+      summary: Import Items
       tags:
       - Items
   /v1/labels:
@@ -869,14 +1312,9 @@ paths:
         "200":
           description: OK
           schema:
-            allOf:
-            - $ref: '#/definitions/server.Results'
-            - properties:
-                items:
-                  items:
-                    $ref: '#/definitions/repo.LabelOut'
-                  type: array
-              type: object
+            items:
+              $ref: '#/definitions/repo.LabelOut'
+            type: array
       security:
       - Bearer: []
       summary: Get All Labels
@@ -899,7 +1337,7 @@ paths:
             $ref: '#/definitions/repo.LabelSummary'
       security:
       - Bearer: []
-      summary: Create a new label
+      summary: Create Label
       tags:
       - Labels
   /v1/labels/{id}:
@@ -917,7 +1355,7 @@ paths:
           description: No Content
       security:
       - Bearer: []
-      summary: deletes a label
+      summary: Delete Label
       tags:
       - Labels
     get:
@@ -936,7 +1374,7 @@ paths:
             $ref: '#/definitions/repo.LabelOut'
       security:
       - Bearer: []
-      summary: Gets a label and fields
+      summary: Get Label
       tags:
       - Labels
     put:
@@ -955,7 +1393,7 @@ paths:
             $ref: '#/definitions/repo.LabelOut'
       security:
       - Bearer: []
-      summary: updates a label
+      summary: Update Label
       tags:
       - Labels
   /v1/locations:
@@ -971,14 +1409,9 @@ paths:
         "200":
           description: OK
           schema:
-            allOf:
-            - $ref: '#/definitions/server.Results'
-            - properties:
-                items:
-                  items:
-                    $ref: '#/definitions/repo.LocationOutCount'
-                  type: array
-              type: object
+            items:
+              $ref: '#/definitions/repo.LocationOutCount'
+            type: array
       security:
       - Bearer: []
       summary: Get All Locations
@@ -1001,7 +1434,7 @@ paths:
             $ref: '#/definitions/repo.LocationSummary'
       security:
       - Bearer: []
-      summary: Create a new location
+      summary: Create Location
       tags:
       - Locations
   /v1/locations/{id}:
@@ -1019,7 +1452,7 @@ paths:
           description: No Content
       security:
       - Bearer: []
-      summary: deletes a location
+      summary: Delete Location
       tags:
       - Locations
     get:
@@ -1038,7 +1471,7 @@ paths:
             $ref: '#/definitions/repo.LocationOut'
       security:
       - Bearer: []
-      summary: Gets a location and fields
+      summary: Get Location
       tags:
       - Locations
     put:
@@ -1063,9 +1496,161 @@ paths:
             $ref: '#/definitions/repo.LocationOut'
       security:
       - Bearer: []
-      summary: updates a location
+      summary: Update Location
       tags:
       - Locations
+  /v1/locations/tree:
+    get:
+      parameters:
+      - description: include items in response tree
+        in: query
+        name: withItems
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/repo.TreeItem'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get Locations Tree
+      tags:
+      - Locations
+  /v1/notifiers:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/repo.NotifierOut'
+            type: array
+      security:
+      - Bearer: []
+      summary: Get Notifiers
+      tags:
+      - Notifiers
+    post:
+      parameters:
+      - description: Notifier Data
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/repo.NotifierCreate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.NotifierOut'
+      security:
+      - Bearer: []
+      summary: Create Notifier
+      tags:
+      - Notifiers
+  /v1/notifiers/{id}:
+    delete:
+      parameters:
+      - description: Notifier ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - Bearer: []
+      summary: Delete a Notifier
+      tags:
+      - Notifiers
+    put:
+      parameters:
+      - description: Notifier ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Notifier Data
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/repo.NotifierUpdate'
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.NotifierOut'
+      security:
+      - Bearer: []
+      summary: Update Notifier
+      tags:
+      - Notifiers
+  /v1/notifiers/test:
+    post:
+      parameters:
+      - description: Notifier ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: URL
+        in: query
+        name: url
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+      security:
+      - Bearer: []
+      summary: Test Notifier
+      tags:
+      - Notifiers
+  /v1/qrcode:
+    get:
+      parameters:
+      - description: data to be encoded into qrcode
+        in: query
+        name: data
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: image/jpeg
+          schema:
+            type: string
+      security:
+      - Bearer: []
+      summary: Create QR Code
+      tags:
+      - Items
+  /v1/reporting/bill-of-materials:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: text/csv
+          schema:
+            type: string
+      security:
+      - Bearer: []
+      summary: Export Bill of Materials
+      tags:
+      - Reporting
   /v1/status:
     get:
       produces:
@@ -1075,7 +1660,7 @@ paths:
           description: OK
           schema:
             $ref: '#/definitions/v1.ApiSummary'
-      summary: Retrieves the basic information about the API
+      summary: Application Info
       tags:
       - Base
   /v1/users/change-password:
@@ -1092,7 +1677,7 @@ paths:
           description: No Content
       security:
       - Bearer: []
-      summary: Updates the users password
+      summary: Change Password
       tags:
       - User
   /v1/users/login:
@@ -1111,6 +1696,12 @@ paths:
         in: formData
         name: password
         type: string
+      - description: Login Data
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/v1.LoginForm'
       produces:
       - application/json
       responses:
@@ -1158,7 +1749,7 @@ paths:
       responses:
         "204":
           description: No Content
-      summary: Get the current user
+      summary: Register New User
       tags:
       - User
   /v1/users/self:
@@ -1170,7 +1761,7 @@ paths:
           description: No Content
       security:
       - Bearer: []
-      summary: Deletes the user account
+      summary: Delete Account
       tags:
       - User
     get:
@@ -1181,14 +1772,14 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/server.Result'
+            - $ref: '#/definitions/v1.Wrapped'
             - properties:
                 item:
                   $ref: '#/definitions/repo.UserOut'
               type: object
       security:
       - Bearer: []
-      summary: Get the current user
+      summary: Get User Self
       tags:
       - User
     put:
@@ -1206,14 +1797,14 @@ paths:
           description: OK
           schema:
             allOf:
-            - $ref: '#/definitions/server.Result'
+            - $ref: '#/definitions/v1.Wrapped'
             - properties:
                 item:
                   $ref: '#/definitions/repo.UserUpdate'
               type: object
       security:
       - Bearer: []
-      summary: Update the current user
+      summary: Update Account
       tags:
       - User
 securityDefinitions:
